@@ -1,0 +1,27 @@
+export interface CustomerInfo {
+  customerName: string
+  propertyName: string
+  address: string
+  city: string
+  state: string
+  zip: string
+  date: string
+}
+
+export interface InstallationData {
+  Unit: string
+  "Toilets Installed:  113": string
+  "Shower Head": string
+  "Bathroom aerator": string
+  "Kitchen Aerator": string
+  "Leak Issue Kitchen Faucet": string
+  "Leak Issue Bath Faucet": string
+  "Tub Spout/Diverter Leak Issue": string
+  Notes: string
+  [key: string]: string
+}
+
+export interface Note {
+  unit: string
+  note: string
+}
