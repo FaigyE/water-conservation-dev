@@ -25,7 +25,7 @@ export default function EnhancedPdfButton({
   const [logoLoaded, setLogoLoaded] = useState(false)
   const [footerLoaded, setFooterLoaded] = useState(false)
   const [logoImage, setLogoImage] = useState<string | null>(null)
-  const [footerImage, setFooterImage] = useState<string | null>(null)
+  const [footerImage, setFooterImage] = useState<{ dataUrl: string; width: number; height: number } | null>(null)
 
   useEffect(() => {
     // Load jsPDF dynamically
@@ -59,7 +59,11 @@ export default function EnhancedPdfButton({
       canvas.height = footerImg.height
       const ctx = canvas.getContext("2d")
       ctx?.drawImage(footerImg, 0, 0)
-      setFooterImage(canvas.toDataURL("image/png"))
+      setFooterImage({
+        dataUrl: canvas.toDataURL("image/png"),
+        width: footerImg.width,
+        height: footerImg.height,
+      })
       setFooterLoaded(true)
     }
     footerImg.src =
@@ -175,17 +179,37 @@ export default function EnhancedPdfButton({
       const pageHeight = doc.internal.pageSize.getHeight()
 
       // Calculate logo and footer dimensions
-      // Make logo bigger and higher up
-      const logoWidth = 70 // Increased from 50
-      const logoHeight = 21 // Increased proportionally
-      const logoX = 15
+      // Make logo bigger and higher up, and move it more to the left
+      const logoWidth = 90 // Increased from 70
+      const logoHeight = 27 // Increased proportionally
+      const logoX = 5 // Moved more to the left (from 15)
       const logoY = 5 // Moved higher up from 10
+
+      // Calculate the position where content should start (below the logo with some margin)
+      const contentStartY = logoY + logoHeight + 15 // Increased from 10 to 15mm margin below the logo
 
       // Calculate footer dimensions to fill the entire page width
       const footerWidth = pageWidth
-      const footerHeight = (footerWidth * 20) / 180 // Maintain aspect ratio
+      let footerHeight = 20 // Default height if we can't calculate
+      let footerAspectRatio = 180 / 20 // Default aspect ratio if we can't calculate
+
+      // Get the actual aspect ratio from the loaded image
+      if (footerImage) {
+        const tempImg = new Image()
+        tempImg.src = footerImage
+        if (tempImg.width && tempImg.height) {
+          footerAspectRatio = tempImg.width / tempImg.height
+        }
+      }
+
+      // Calculate height based on actual aspect ratio
+      footerHeight = footerWidth / footerAspectRatio
       const footerX = 0
       const footerY = pageHeight - footerHeight
+
+      // Calculate the available space for content on each page
+      const safeBottomMargin = 15 // Safety margin at the bottom of the page
+      const availableHeight = pageHeight - contentStartY - footerHeight - safeBottomMargin
 
       // Helper function to add header and footer to each page
       const addHeaderFooter = (pageNum: number, totalPages: number) => {
@@ -194,18 +218,45 @@ export default function EnhancedPdfButton({
           doc.addImage(logoImage, "PNG", logoX, logoY, logoWidth, logoHeight)
         }
 
-        // Add footer - full width of the page
+        // Add footer - full width of the page with correct aspect ratio
         if (footerImage) {
-          doc.addImage(footerImage, "PNG", footerX, footerY, footerWidth, footerHeight)
+          const footerWidth = pageWidth
+          const footerHeight = pageWidth * (footerImage.height / footerImage.width)
+          const footerX = 0
+          const footerY = pageHeight - footerHeight
+          doc.addImage(footerImage.dataUrl, "PNG", footerX, footerY, footerWidth, footerHeight)
         }
 
-        // Add page number
+        // Add page number - aligned with the logo vertically
         doc.setFontSize(10)
-        doc.text(`Page ${pageNum} of ${totalPages}`, 190, 10, { align: "right" })
+        doc.text(`Page ${pageNum} of ${totalPages}`, 190, logoY + 10, { align: "right" }) // Aligned with logo
       }
 
+      // Calculate total pages based on data
+      // This is an estimate and will be updated as we generate the PDF
+      let totalPages = 2 // Cover page + letter page
+
+      // Estimate notes pages
+      const filteredNotes = notes.filter((note) => {
+        if (!note.unit || note.unit.trim() === "") return false
+        const lowerUnit = note.unit.toLowerCase()
+        const invalidValues = ["total", "sum", "average", "avg", "count", "header", "n/a", "na"]
+        if (invalidValues.some((val) => lowerUnit.includes(val))) return false
+        return true
+      })
+
+      // Estimate how many notes can fit on a page
+      const estimatedNotesPerPage = Math.floor(availableHeight / 10) // Assuming 10mm per note
+      const estimatedNotesPages = filteredNotes.length > 0 ? Math.ceil(filteredNotes.length / estimatedNotesPerPage) : 0
+      totalPages += estimatedNotesPages
+
+      // Estimate detail pages
+      const estimatedRowsPerPage = Math.floor(availableHeight / 10) // Assuming 10mm per row
+      const estimatedDetailPages = Math.ceil(filteredData.length / estimatedRowsPerPage)
+      totalPages += estimatedDetailPages
+
       // Cover Page
-      addHeaderFooter(1, 4 + Math.ceil(notes.length / 15) + Math.ceil(filteredData.length / 10))
+      addHeaderFooter(1, totalPages)
 
       doc.setFontSize(24)
       doc.text("Water Conservation", 105, 80, { align: "center" })
@@ -221,10 +272,10 @@ export default function EnhancedPdfButton({
 
       // Letter Page
       doc.addPage()
-      addHeaderFooter(2, 4 + Math.ceil(notes.length / 15) + Math.ceil(filteredData.length / 10))
+      addHeaderFooter(2, totalPages)
 
       doc.setFontSize(12)
-      let yPos = 40
+      let yPos = contentStartY // Use the dynamic content start position instead of fixed 40
 
       doc.text(customerInfo.date, 15, yPos)
       yPos += 10
@@ -263,103 +314,85 @@ export default function EnhancedPdfButton({
       yPos += 7
       doc.text("Chief Operating Officer", 15, yPos)
 
-      // Filter notes to only include those with valid unit numbers
-      const filteredNotes = notes.filter((note) => {
-        if (!note.unit || note.unit.trim() === "") return false
-
-        const lowerUnit = note.unit.toLowerCase()
-        const invalidValues = ["total", "sum", "average", "avg", "count", "header", "n/a", "na"]
-        if (invalidValues.some((val) => lowerUnit.includes(val))) return false
-
-        return true
-      })
-
       // Notes Pages
       if (filteredNotes.length > 0) {
-        doc.addPage()
-        addHeaderFooter(3, 4 + Math.ceil(filteredNotes.length / 15) + Math.ceil(filteredData.length / 10))
+        let currentPage = 3
+        let currentNoteIndex = 0
 
-        doc.setFontSize(18)
-        doc.text("Notes", 105, 30, { align: "center" })
+        while (currentNoteIndex < filteredNotes.length) {
+          doc.addPage()
+          addHeaderFooter(currentPage, totalPages)
+          currentPage++
 
-        doc.setFontSize(12)
+          doc.setFontSize(18)
+          doc.text("Notes", 105, contentStartY, { align: "center" })
 
-        // Create table header
-        yPos = 40
-        doc.setFillColor(240, 240, 240)
-        doc.rect(15, yPos - 5, 180, 10, "F")
-        doc.setFont("helvetica", "bold")
-        doc.text("Unit", 20, yPos) // Changed from "Apt" to "Unit"
-        doc.text("Notes", 50, yPos)
-        doc.setFont("helvetica", "normal")
-        yPos += 10
+          doc.setFontSize(12)
 
-        // Add notes in batches of 15 per page
-        const notesPerPage = 15
-        for (let i = 0; i < filteredNotes.length; i++) {
-          if (i > 0 && i % notesPerPage === 0) {
-            doc.addPage()
-            const pageNum = 3 + Math.floor(i / notesPerPage)
-            addHeaderFooter(pageNum, 4 + Math.ceil(filteredNotes.length / 15) + Math.ceil(filteredData.length / 10))
-
-            // Recreate table header on new page
-            yPos = 40
-            doc.setFillColor(240, 240, 240)
-            doc.rect(15, yPos - 5, 180, 10, "F")
-            doc.setFont("helvetica", "bold")
-            doc.text("Unit", 20, yPos) // Changed from "Apt" to "Unit"
-            doc.text("Notes", 50, yPos)
-            doc.setFont("helvetica", "normal")
-            yPos += 10
-          }
-
-          // Draw alternating row background
-          if (i % 2 === 0) {
-            doc.setFillColor(250, 250, 250)
-            doc.rect(15, yPos - 5, 180, 10, "F")
-          }
-
-          doc.text(filteredNotes[i].unit, 20, yPos)
-
-          // Handle long notes with wrapping
-          const noteLines = doc.splitTextToSize(filteredNotes[i].note, 140)
-          noteLines.forEach((line, lineIndex) => {
-            if (lineIndex === 0) {
-              doc.text(line, 50, yPos)
-            } else {
-              yPos += 7
-              doc.text(line, 50, yPos)
-            }
-          })
-
+          // Create table header - add more space after the title
+          yPos = contentStartY + 10 // Add 10mm after the title
+          doc.setFillColor(240, 240, 240)
+          doc.rect(15, yPos - 5, 180, 10, "F")
+          doc.setFont("helvetica", "bold")
+          doc.setFontSize(10) // Set consistent font size for notes
+          doc.text("Unit", 20, yPos) // Changed from "Apt" to "Unit"
+          doc.text("Notes", 50, yPos)
+          doc.setFont("helvetica", "normal")
           yPos += 10
 
-          // Check if we need more space for the next row
-          if (yPos > 250) {
-            doc.addPage()
-            const pageNum = 3 + Math.floor((i + 1) / notesPerPage)
-            addHeaderFooter(pageNum, 4 + Math.ceil(filteredNotes.length / 15) + Math.ceil(filteredData.length / 10))
+          // Calculate the maximum Y position for content on this page
+          const maxYPos = pageHeight - footerHeight - safeBottomMargin
 
-            // Recreate table header on new page
-            yPos = 40
-            doc.setFillColor(240, 240, 240)
-            doc.rect(15, yPos - 5, 180, 10, "F")
-            doc.setFont("helvetica", "bold")
-            doc.text("Unit", 20, yPos) // Changed from "Apt" to "Unit"
-            doc.text("Notes", 50, yPos)
-            doc.setFont("helvetica", "normal")
+          // Add as many notes as will fit on this page
+          let rowCount = 0
+          while (currentNoteIndex < filteredNotes.length) {
+            const note = filteredNotes[currentNoteIndex]
+
+            // Draw alternating row background
+            if (rowCount % 2 === 0) {
+              doc.setFillColor(250, 250, 250)
+              doc.rect(15, yPos - 5, 180, 10, "F")
+            }
+
+            doc.text(note.unit, 20, yPos)
+
+            // Handle long notes with wrapping
+            const noteLines = doc.splitTextToSize(note.note, 140)
+            doc.setFontSize(10) // Ensure consistent font size
+
+            // Calculate the height this note will take
+            const noteHeight = noteLines.length * 7 // 7mm per line
+
+            // Check if this note will fit on the current page
+            if (yPos + noteHeight > maxYPos && rowCount > 0) {
+              // This note won't fit, so we'll start a new page
+              break
+            }
+
+            // Add the note text
+            noteLines.forEach((line, lineIndex) => {
+              if (lineIndex === 0) {
+                doc.text(line, 50, yPos)
+              } else {
+                yPos += 7
+                doc.text(line, 50, yPos)
+              }
+            })
+
             yPos += 10
+            currentNoteIndex++
+            rowCount++
+
+            // Check if we're near the bottom of the page
+            if (yPos + 10 > maxYPos) {
+              break
+            }
           }
         }
       }
 
       // Detail Pages
-      doc.addPage()
-      const detailStartPage = 3 + Math.ceil(filteredNotes.length / 15)
-      addHeaderFooter(detailStartPage, 4 + Math.ceil(filteredNotes.length / 15) + Math.ceil(filteredData.length / 10))
-
-      doc.setFontSize(18)
-      doc.text("Detailed Apartment Information", 105, 30, { align: "center" })
+      let currentPage = 3 + (filteredNotes.length > 0 ? Math.ceil(filteredNotes.length / estimatedNotesPerPage) : 0)
 
       // Get the actual column names from the data
       const kitchenAeratorColumn = findColumnName(["Kitchen Aerator", "kitchen aerator", "kitchen", "kitchen aerators"])
@@ -454,7 +487,7 @@ export default function EnhancedPdfButton({
         bathroom: 25,
         shower: 25,
         toilet: 20,
-        notes: 40,
+        notes: 60, // Increased width for notes column
       }
 
       // Calculate total minimum width needed
@@ -483,190 +516,161 @@ export default function EnhancedPdfButton({
         columnPositions.push(currentPos)
       }
 
-      // Create table header
-      yPos = 40
-      doc.setFillColor(240, 240, 240)
-      doc.rect(15, yPos - 5, 180, 10, "F")
-      doc.setFont("helvetica", "bold")
-      doc.setFontSize(9)
+      // Process installation data in batches that fit on each page
+      let currentDataIndex = 0
 
-      let colIndex = 0
-      doc.text("Unit", columnPositions[colIndex++], yPos) // Changed from "Apt" to "Unit"
+      while (currentDataIndex < filteredData.length) {
+        doc.addPage()
+        addHeaderFooter(currentPage, totalPages)
+        currentPage++
 
-      // Use shorter header text to avoid overlap
-      if (hasKitchenAerators) {
-        doc.text("Kitchen", columnPositions[colIndex++], yPos)
-      }
-      if (hasBathroomAerators) {
-        doc.text("Bathroom", columnPositions[colIndex++], yPos)
-      }
-      if (hasShowers) {
-        doc.text("Shower", columnPositions[colIndex++], yPos)
-      }
-      if (hasToilets) {
-        doc.text("Toilet", columnPositions[colIndex++], yPos)
-      }
-      if (hasNotes) {
-        doc.text("Notes", columnPositions[colIndex++], yPos)
-      }
+        doc.setFontSize(18)
+        doc.text("Detailed Apartment Information", 105, contentStartY, { align: "center" })
 
-      doc.setFont("helvetica", "normal")
-      yPos += 10
-
-      // Add installation data in batches of 10 per page
-      const itemsPerPage = 10
-      for (let i = 0; i < filteredData.length; i++) {
-        const item = filteredData[i]
-
-        if (i > 0 && i % itemsPerPage === 0) {
-          doc.addPage()
-          const pageNum = detailStartPage + Math.floor(i / itemsPerPage)
-          addHeaderFooter(pageNum, 4 + Math.ceil(filteredNotes.length / 15) + Math.ceil(filteredData.length / 10))
-
-          // Recreate table header on new page
-          yPos = 40
-          doc.setFillColor(240, 240, 240)
-          doc.rect(15, yPos - 5, 180, 10, "F")
-          doc.setFont("helvetica", "bold")
-          doc.setFontSize(9)
-
-          colIndex = 0
-          doc.text("Unit", columnPositions[colIndex++], yPos) // Changed from "Apt" to "Unit"
-
-          if (hasKitchenAerators) {
-            doc.text("Kitchen", columnPositions[colIndex++], yPos)
-          }
-          if (hasBathroomAerators) {
-            doc.text("Bathroom", columnPositions[colIndex++], yPos)
-          }
-          if (hasShowers) {
-            doc.text("Shower", columnPositions[colIndex++], yPos)
-          }
-          if (hasToilets) {
-            doc.text("Toilet", columnPositions[colIndex++], yPos)
-          }
-          if (hasNotes) {
-            doc.text("Notes", columnPositions[colIndex++], yPos)
-          }
-
-          doc.setFont("helvetica", "normal")
-          yPos += 10
-        }
-
-        // Draw alternating row background
-        if (i % 2 === 0) {
-          doc.setFillColor(250, 250, 250)
-          doc.rect(15, yPos - 5, 180, 10, "F")
-        }
-
-        // Check if this is a special unit (shower room, office, etc.)
-        const isSpecialUnit =
-          item.Unit.toLowerCase().includes("shower") ||
-          item.Unit.toLowerCase().includes("office") ||
-          item.Unit.toLowerCase().includes("laundry")
-
-        // Get values for each cell using the found column names
-        const kitchenAerator =
-          isSpecialUnit || !kitchenAeratorColumn ? "" : getAeratorDescription(item[kitchenAeratorColumn], "kitchen")
-
-        const bathroomAerator = !bathroomAeratorColumn
-          ? ""
-          : getAeratorDescription(item[bathroomAeratorColumn], "bathroom")
-
-        const showerHead = !showerHeadColumn ? "" : getAeratorDescription(item[showerHeadColumn], "shower")
-
-        // Check both possible column names for toilet installation
-        const toilet = hasToiletInstalled(item) ? "Yes" : ""
-
-        // Update the notes compilation in the PDF generation
-        // Compile notes with proper sentence case
-        let noteText = ""
-        if (item["Leak Issue Kitchen Faucet"]) noteText += "Dripping from kitchen faucet. "
-        if (item["Leak Issue Bath Faucet"]) noteText += "Dripping from bathroom faucet. "
-        if (item["Tub Spout/Diverter Leak Issue"] === "Light") noteText += "Light leak from tub spout/diverter. "
-        if (item["Tub Spout/Diverter Leak Issue"] === "Moderate") noteText += "Moderate leak from tub spout/diverter. "
-        if (item["Tub Spout/Diverter Leak Issue"] === "Heavy") noteText += "Heavy leak from tub spout/diverter. "
-        if (item.Notes) noteText += item.Notes
-
-        // Format the notes with proper sentence case
-        noteText = formatNote(noteText)
-
-        // Write data to PDF
+        // Create table header - add more space after the title
+        yPos = contentStartY + 10 // Add 10mm after the title
+        doc.setFillColor(240, 240, 240)
+        doc.rect(15, yPos - 5, 180, 10, "F")
+        doc.setFont("helvetica", "bold")
         doc.setFontSize(9)
 
-        colIndex = 0
-        doc.text(item.Unit, columnPositions[colIndex++], yPos)
+        let colIndex = 0
+        doc.text("Unit", columnPositions[colIndex++], yPos) // Changed from "Apt" to "Unit"
 
+        // Use shorter header text to avoid overlap
         if (hasKitchenAerators) {
-          doc.text(kitchenAerator === "No Touch." ? "" : kitchenAerator, columnPositions[colIndex++], yPos)
+          doc.text("Kitchen", columnPositions[colIndex++], yPos)
         }
         if (hasBathroomAerators) {
-          doc.text(bathroomAerator === "No Touch." ? "" : bathroomAerator, columnPositions[colIndex++], yPos)
+          doc.text("Bathroom", columnPositions[colIndex++], yPos)
         }
         if (hasShowers) {
-          doc.text(showerHead === "No Touch." ? "" : showerHead, columnPositions[colIndex++], yPos)
+          doc.text("Shower", columnPositions[colIndex++], yPos)
         }
         if (hasToilets) {
-          doc.text(toilet, columnPositions[colIndex++], yPos)
+          doc.text("Toilet", columnPositions[colIndex++], yPos)
         }
-
-        // Handle notes with wrapping if needed
         if (hasNotes) {
-          // Calculate the maximum width for notes based on the column width
-          const maxWidth = columnWidths[columnWidths.length - 1] - 5
-
-          // Split the note text into lines that fit within the column width
-          const noteLines = doc.splitTextToSize(noteText, maxWidth)
-
-          // Write each line, incrementing the y-position for each additional line
-          noteLines.forEach((line, lineIndex) => {
-            if (lineIndex === 0) {
-              doc.text(line, columnPositions[colIndex], yPos)
-            } else {
-              yPos += 5
-              doc.text(line, columnPositions[colIndex], yPos)
-            }
-          })
+          doc.text("Notes", columnPositions[colIndex++], yPos)
         }
 
+        doc.setFont("helvetica", "normal")
         yPos += 10
 
-        // Check if we need more space for the next row
-        if (yPos > 250) {
-          doc.addPage()
-          const pageNum = detailStartPage + Math.floor((i + 1) / itemsPerPage)
-          addHeaderFooter(pageNum, 4 + Math.ceil(filteredNotes.length / 15) + Math.ceil(filteredData.length / 10))
+        // Calculate the maximum Y position for content on this page
+        const maxYPos = pageHeight - footerHeight - safeBottomMargin
 
-          // Recreate table header on new page
-          yPos = 40
-          doc.setFillColor(240, 240, 240)
-          doc.rect(15, yPos - 5, 180, 10, "F")
-          doc.setFont("helvetica", "bold")
+        // Add as many rows as will fit on this page
+        let rowCount = 0
+        while (currentDataIndex < filteredData.length) {
+          const item = filteredData[currentDataIndex]
+
+          // Store the initial y position for this row
+          const rowStartY = yPos - 5
+
+          // Check if this is a special unit (shower room, office, etc.)
+          const isSpecialUnit =
+            item.Unit.toLowerCase().includes("shower") ||
+            item.Unit.toLowerCase().includes("office") ||
+            item.Unit.toLowerCase().includes("laundry")
+
+          // Get values for each cell using the found column names
+          const kitchenAerator =
+            isSpecialUnit || !kitchenAeratorColumn ? "" : getAeratorDescription(item[kitchenAeratorColumn], "kitchen")
+
+          const bathroomAerator = !bathroomAeratorColumn
+            ? ""
+            : getAeratorDescription(item[bathroomAeratorColumn], "bathroom")
+
+          const showerHead = !showerHeadColumn ? "" : getAeratorDescription(item[showerHeadColumn], "shower")
+
+          // Check both possible column names for toilet installation
+          const toilet = hasToiletInstalled(item) ? "Yes" : ""
+
+          // Update the notes compilation in the PDF generation
+          // Compile notes with proper sentence case
+          let noteText = ""
+          if (item["Leak Issue Kitchen Faucet"]) noteText += "Dripping from kitchen faucet. "
+          if (item["Leak Issue Bath Faucet"]) noteText += "Dripping from bathroom faucet. "
+          if (item["Tub Spout/Diverter Leak Issue"] === "Light") noteText += "Light leak from tub spout/diverter. "
+          if (item["Tub Spout/Diverter Leak Issue"] === "Moderate")
+            noteText += "Moderate leak from tub spout/diverter. "
+          if (item["Tub Spout/Diverter Leak Issue"] === "Heavy") noteText += "Heavy leak from tub spout/diverter. "
+          if (item.Notes) noteText += item.Notes
+
+          // Format the notes with proper sentence case
+          noteText = formatNote(noteText)
+
+          // Calculate how many lines the note will take
+          let noteLines: string[] = []
+          if (hasNotes && noteText) {
+            // Calculate the maximum width for notes based on the column width
+            const maxWidth = columnWidths[columnWidths.length - 1] - 5
+            noteLines = doc.splitTextToSize(noteText, maxWidth)
+          }
+
+          // Calculate the height this row will take
+          const rowHeight = Math.max(10, noteLines.length * 5 + 5) // Minimum 10mm, or more if needed for notes
+
+          // Check if this row will fit on the current page
+          if (yPos + rowHeight > maxYPos && rowCount > 0) {
+            // This row won't fit, so we'll start a new page
+            break
+          }
+
+          // Draw alternating row background
+          if (rowCount % 2 === 0) {
+            doc.setFillColor(250, 250, 250)
+            doc.rect(15, rowStartY, 180, rowHeight, "F")
+          }
+
+          // Write data to PDF
           doc.setFontSize(9)
 
           colIndex = 0
-          doc.text("Unit", columnPositions[colIndex++], yPos) // Changed from "Apt" to "Unit"
+          doc.text(item.Unit, columnPositions[colIndex++], yPos)
 
           if (hasKitchenAerators) {
-            doc.text("Kitchen", columnPositions[colIndex++], yPos)
+            doc.text(kitchenAerator === "No Touch." ? "" : kitchenAerator, columnPositions[colIndex++], yPos)
           }
           if (hasBathroomAerators) {
-            doc.text("Bathroom", columnPositions[colIndex++], yPos)
+            doc.text(bathroomAerator === "No Touch." ? "" : bathroomAerator, columnPositions[colIndex++], yPos)
           }
           if (hasShowers) {
-            doc.text("Shower", columnPositions[colIndex++], yPos)
+            doc.text(showerHead === "No Touch." ? "" : showerHead, columnPositions[colIndex++], yPos)
           }
           if (hasToilets) {
-            doc.text("Toilet", columnPositions[colIndex++], yPos)
-          }
-          if (hasNotes) {
-            doc.text("Notes", columnPositions[colIndex++], yPos)
+            doc.text(toilet, columnPositions[colIndex++], yPos)
           }
 
-          doc.setFont("helvetica", "normal")
-          yPos += 10
+          // Handle notes with wrapping if needed
+          if (hasNotes) {
+            doc.setFontSize(10) // Ensure consistent font size for notes
+            // Write each line, incrementing the y-position for each additional line
+            noteLines.forEach((line, lineIndex) => {
+              if (lineIndex === 0) {
+                doc.text(line, columnPositions[colIndex], yPos)
+              } else {
+                yPos += 5
+                doc.text(line, columnPositions[colIndex], yPos)
+              }
+            })
+          }
+
+          // Increment y position based on the row height
+          yPos = rowStartY + rowHeight + 5
+          currentDataIndex++
+          rowCount++
+
+          // Check if we're near the bottom of the page
+          if (yPos + 10 > maxYPos) {
+            break
+          }
         }
       }
+
+      // Update the total pages count based on the actual number of pages generated
+      totalPages = currentPage - 1
 
       // Save the PDF
       const filename = `${customerInfo.propertyName.replace(/\s+/g, "-")}_Water_Conservation_Report.pdf`
