@@ -27,16 +27,41 @@ export const getAeratorDescription = (value: string, type: string) => {
   if (!value) return "No Touch."
 
   if (value === "1") return type === "shower" ? "1.75 GPM" : "1.0 GPM"
-  if (value === "2") return type === "shower" ? "1.75 GPM (2)" : "1.0 GPM (2)"
+  if (value === "2") return type === "shower" ? "1.75 GPM" : "1.0 GPM"
 
   // If it's a text value that indicates installation
   if (isAeratorInstalled(value)) {
     // If the text already includes GPM, use it as is
     if (value.toLowerCase().includes("gpm")) return value
 
-    // Otherwise, add the standard GPM value
-    return type === "shower" ? `1.75 GPM (${value})` : `1.0 GPM (${value})`
+    // For specific text descriptions, return standard GPM value without the description
+    return type === "shower" ? "1.75 GPM" : "1.0 GPM"
   }
 
   return "No Touch."
+}
+
+/**
+ * Formats a note with proper sentence case
+ * @param note The note to format
+ * @returns The formatted note
+ */
+export const formatNote = (note: string): string => {
+  if (!note) return ""
+
+  // Split by periods to handle multiple sentences
+  const sentences = note.split(".")
+
+  return (
+    sentences
+      .map((sentence) => {
+        const trimmed = sentence.trim()
+        if (!trimmed) return ""
+
+        // Capitalize first letter, lowercase the rest
+        return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase()
+      })
+      .filter((s) => s) // Remove empty strings
+      .join(". ") + (note.endsWith(".") ? "." : "")
+  ) // Add final period if original had one
 }

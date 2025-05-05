@@ -8,24 +8,35 @@ interface ReportNotesPageProps {
 }
 
 export default function ReportNotesPage({ notes }: ReportNotesPageProps) {
+  // Filter out notes without valid unit numbers
+  const filteredNotes = notes.filter((note) => {
+    if (!note.unit || note.unit.trim() === "") return false
+
+    const lowerUnit = note.unit.toLowerCase()
+    const invalidValues = ["total", "sum", "average", "avg", "count", "header", "n/a", "na"]
+    if (invalidValues.some((val) => lowerUnit.includes(val))) return false
+
+    return true
+  })
+
   // Split notes into pages of 15 items each
   const notesPerPage = 15
   const notePages = []
 
-  for (let i = 0; i < notes.length; i += notesPerPage) {
-    notePages.push(notes.slice(i, i + notesPerPage))
+  for (let i = 0; i < filteredNotes.length; i += notesPerPage) {
+    notePages.push(filteredNotes.slice(i, i + notesPerPage))
   }
 
   return (
     <>
       {notePages.map((pageNotes, pageIndex) => (
         <div key={pageIndex} className="report-page min-h-[1056px] relative">
-          {/* Header with logo */}
+          {/* Header with logo - made bigger and higher up */}
           <div className="mb-8">
             <img
               src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Screenshot%202025-04-29%20115501-BD1uw5tVq9PtVYW6Z6FKM1i8in6GeV.png"
               alt="GreenLight Logo"
-              className="h-16"
+              className="h-24" // Increased from h-16
               crossOrigin="anonymous"
             />
           </div>
@@ -37,7 +48,7 @@ export default function ReportNotesPage({ notes }: ReportNotesPageProps) {
             <table className="w-full">
               <thead>
                 <tr>
-                  <th className="text-left py-2 px-4 border-b">Apt</th>
+                  <th className="text-left py-2 px-4 border-b">Unit</th>
                   <th className="text-left py-2 px-4 border-b">Notes</th>
                 </tr>
               </thead>
@@ -52,7 +63,7 @@ export default function ReportNotesPage({ notes }: ReportNotesPageProps) {
             </table>
           </div>
 
-          {/* Footer */}
+          {/* Footer - full width */}
           <div className="footer-container">
             <img
               src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Screenshot%202025-04-29%20115454-uWCS2yWrowegSqw9c2SIVcLdedTk82.png"

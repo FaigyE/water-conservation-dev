@@ -7,12 +7,12 @@ interface ReportCoverPageProps {
 export default function ReportCoverPage({ customerInfo }: ReportCoverPageProps) {
   return (
     <div className="report-page min-h-[1056px] relative">
-      {/* Header with logo */}
+      {/* Header with logo - made bigger and higher up */}
       <div className="mb-8">
         <img
           src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Screenshot%202025-04-29%20115501-BD1uw5tVq9PtVYW6Z6FKM1i8in6GeV.png"
           alt="GreenLight Logo"
-          className="h-16"
+          className="h-24" // Increased from h-16
           crossOrigin="anonymous"
         />
       </div>
@@ -35,7 +35,7 @@ export default function ReportCoverPage({ customerInfo }: ReportCoverPageProps) 
         </p>
       </div>
 
-      {/* Footer */}
+      {/* Footer - full width */}
       <div className="footer-container">
         <img
           src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Screenshot%202025-04-29%20115454-uWCS2yWrowegSqw9c2SIVcLdedTk82.png"

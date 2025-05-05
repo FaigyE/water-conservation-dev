@@ -10,9 +10,7 @@ import ReportCoverPage from "@/components/report-cover-page"
 import ReportLetterPage from "@/components/report-letter-page"
 import ReportNotesPage from "@/components/report-notes-page"
 import ReportDetailPage from "@/components/report-detail-page"
-import SimplePdfButton from "@/components/simple-pdf-button"
 import EnhancedPdfButton from "@/components/enhanced-pdf-button"
-import PrintButton from "@/components/print-button"
 import type { CustomerInfo, InstallationData } from "@/lib/types"
 
 export default function ReportPage() {
@@ -22,6 +20,7 @@ export default function ReportPage() {
   const [toiletCount, setToiletCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState("cover")
+  const [csvSchema, setCsvSchema] = useState<any[]>([])
 
   useEffect(() => {
     // Load data from localStorage
@@ -35,14 +34,49 @@ export default function ReportPage() {
       setCustomerInfo(parsedCustomerInfo)
       setInstallationData(parsedInstallationData)
 
-      // Count toilets installed
-      let count = 0
-      parsedInstallationData.forEach((item: InstallationData) => {
-        if (item["Toilets Installed:  113"] === "1") {
-          count++
-        }
-      })
-      setToiletCount(count)
+      // Log the schema of the CSV data
+      if (parsedInstallationData && parsedInstallationData.length > 0) {
+        const firstItem = parsedInstallationData[0]
+        const schema = Object.keys(firstItem).map((key) => ({
+          name: key,
+          type: typeof firstItem[key],
+          exampleValue: firstItem[key],
+        }))
+        setCsvSchema(schema)
+        console.log("CSV Schema:", JSON.stringify(schema))
+        console.log("First few rows:", parsedInstallationData.slice(0, 3))
+      }
+
+      // Helper function to find the toilet column and extract the count
+      const getToiletInfo = () => {
+        if (!parsedInstallationData || parsedInstallationData.length === 0) return { count: 0, totalCount: 0 }
+
+        // Get the first item to check column names
+        const firstItem = parsedInstallationData[0]
+
+        // Find the toilet column by looking for keys that start with "Toilets Installed:"
+        const toiletColumn = Object.keys(firstItem).find((key) => key.startsWith("Toilets Installed:"))
+
+        if (!toiletColumn) return { count: 0, totalCount: 0 }
+
+        // Extract the total count from the column name (e.g., "Toilets Installed: 53" -> 53)
+        const totalCountMatch = toiletColumn.match(/Toilets Installed:\s*(\d+)/)
+        const totalCount = totalCountMatch ? Number.parseInt(totalCountMatch[1]) : 0
+
+        // Count installed toilets
+        let count = 0
+        parsedInstallationData.forEach((item) => {
+          if (item[toiletColumn] && item[toiletColumn] !== "") {
+            count++
+          }
+        })
+
+        return { count, totalCount }
+      }
+
+      // Replace the toilet counting code in useEffect with this
+      const { count, totalCount } = getToiletInfo()
+      setToiletCount(totalCount) // Use the total count from the column name
     }
 
     setLoading(false)
@@ -76,8 +110,32 @@ export default function ReportPage() {
     )
   }
 
+  // Filter out rows without valid unit/apartment numbers
+  const filteredData = installationData.filter((item) => {
+    // Check if Unit exists and is not empty
+    if (!item.Unit || item.Unit.trim() === "") return false
+
+    // Filter out rows with non-apartment values (often headers, totals, etc.)
+    const lowerUnit = item.Unit.toLowerCase()
+    const invalidValues = ["total", "sum", "average", "avg", "count", "header", "n/a", "na"]
+    if (invalidValues.some((val) => lowerUnit.includes(val))) return false
+
+    return true
+  })
+
+  console.log(`Filtered ${installationData.length - filteredData.length} rows without valid unit numbers`)
+
+  // Helper function to check for toilet installation
+  const hasToiletInstalled = (item: InstallationData): boolean => {
+    // Check both possible column names for toilet installation
+    return (
+      (item["Toilets Installed:  53"] && item["Toilets Installed:  53"] !== "") ||
+      (item["Toilets Installed:  113"] && item["Toilets Installed:  113"] !== "")
+    )
+  }
+
   // Group notes for the notes pages
-  const notes = installationData
+  const notes = filteredData
     .filter(
       (item) =>
         item["Leak Issue Kitchen Faucet"] || item["Leak Issue Bath Faucet"] || item["Tub Spout/Diverter Leak Issue"],
@@ -108,7 +166,7 @@ export default function ReportPage() {
             <>
               <EnhancedPdfButton
                 customerInfo={customerInfo}
-                installationData={installationData}
+                installationData={filteredData}
                 toiletCount={toiletCount}
                 notes={notes}
               />
@@ -139,7 +197,7 @@ export default function ReportPage() {
           </TabsContent>
 
           <TabsContent value="details">
-            <ReportDetailPage installationData={installationData} />
+            <ReportDetailPage installationData={filteredData} />
           </TabsContent>
         </Tabs>
       </div>
@@ -159,7 +217,7 @@ export default function ReportPage() {
         </div>
         <div className="page-break"></div>
         <div className="report-page">
-          <ReportDetailPage installationData={installationData} />
+          <ReportDetailPage installationData={filteredData} />
         </div>
       </div>
     </div>

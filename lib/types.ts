@@ -10,7 +10,6 @@ export interface CustomerInfo {
 
 export interface InstallationData {
   Unit: string
-  "Toilets Installed:  113": string
   "Shower Head": string
   "Bathroom aerator": string
   "Kitchen Aerator": string
@@ -18,7 +17,7 @@ export interface InstallationData {
   "Leak Issue Bath Faucet": string
   "Tub Spout/Diverter Leak Issue": string
   Notes: string
-  [key: string]: string
+  [key: string]: string | undefined
 }
 
 export interface Note {
