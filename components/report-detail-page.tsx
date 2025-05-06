@@ -59,6 +59,8 @@ export default function ReportDetailPage({ installationData }: ReportDetailPageP
 
   // Update the findColumnName function to be more robust and add more debugging
 
+  // Update the findColumnName function to be more robust for both CSV and Excel files
+
   // Replace the findColumnName function with this improved version
   const findColumnName = (possibleNames: string[]): string | null => {
     if (!filteredData || filteredData.length === 0) return null
@@ -86,14 +88,59 @@ export default function ReportDetailPage({ installationData }: ReportDetailPageP
       }
     }
 
-    // Finally try partial match
+    // Then try partial match with both key and possibleName variations
     for (const key of Object.keys(item)) {
       for (const possibleName of possibleNames) {
+        // Check if key contains possibleName or possibleName contains key
         if (
           key.toLowerCase().includes(possibleName.toLowerCase()) ||
           possibleName.toLowerCase().includes(key.toLowerCase())
         ) {
           console.log(`Found partial match for column: ${key} (searched for: ${possibleName})`)
+          return key
+        }
+      }
+    }
+
+    // Try to find by common patterns
+    const keywordMap = {
+      kitchen: ["kitchen", "kitch", "kit"],
+      bathroom: ["bathroom", "bath", "lav", "lavatory"],
+      shower: ["shower", "shwr"],
+    }
+
+    for (const key of Object.keys(item)) {
+      const keyLower = key.toLowerCase()
+
+      // Check for kitchen aerator
+      if (possibleNames.some((name) => name.toLowerCase().includes("kitchen"))) {
+        if (
+          keywordMap.kitchen.some((keyword) => keyLower.includes(keyword)) &&
+          (keyLower.includes("aer") || keyLower.includes("faucet"))
+        ) {
+          console.log(`Found keyword match for kitchen column: ${key}`)
+          return key
+        }
+      }
+
+      // Check for bathroom aerator
+      if (possibleNames.some((name) => name.toLowerCase().includes("bathroom"))) {
+        if (
+          keywordMap.bathroom.some((keyword) => keyLower.includes(keyword)) &&
+          (keyLower.includes("aer") || keyLower.includes("faucet"))
+        ) {
+          console.log(`Found keyword match for bathroom column: ${key}`)
+          return key
+        }
+      }
+
+      // Check for shower head
+      if (possibleNames.some((name) => name.toLowerCase().includes("shower"))) {
+        if (
+          keywordMap.shower.some((keyword) => keyLower.includes(keyword)) &&
+          (keyLower.includes("head") || keyLower.includes("hd"))
+        ) {
+          console.log(`Found keyword match for shower column: ${key}`)
           return key
         }
       }

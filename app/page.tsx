@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
 import Papa from "papaparse"
+import { parseExcelFile } from "@/lib/excel-parser"
 
 export default function Home() {
   const router = useRouter()
@@ -33,33 +34,49 @@ export default function Home() {
 
     setLoading(true)
 
-    // Parse CSV file
-    Papa.parse(file, {
-      header: true,
-      complete: (results) => {
-        // Store data in localStorage (for demo purposes)
-        localStorage.setItem("installationData", JSON.stringify(results.data))
-        localStorage.setItem(
-          "customerInfo",
-          JSON.stringify({
-            customerName,
-            propertyName,
-            address,
-            city,
-            state,
-            zip,
-            date: new Date().toLocaleDateString(),
-          }),
-        )
+    try {
+      // Check file extension to determine how to parse
+      const fileExtension = file.name.split(".").pop()?.toLowerCase()
+      let parsedData: any[] = []
 
-        // Navigate to report page
-        router.push("/report")
-      },
-      error: (error) => {
-        console.error("Error parsing CSV:", error)
-        setLoading(false)
-      },
-    })
+      if (fileExtension === "csv") {
+        // Parse CSV file
+        parsedData = await new Promise((resolve, reject) => {
+          Papa.parse(file, {
+            header: true,
+            complete: (results) => resolve(results.data),
+            error: (error) => reject(error),
+          })
+        })
+      } else if (fileExtension === "xlsx" || fileExtension === "xls") {
+        // Parse Excel file
+        parsedData = await parseExcelFile(file)
+      } else {
+        throw new Error("Unsupported file format. Please upload a CSV or Excel file.")
+      }
+
+      // Store data in localStorage
+      localStorage.setItem("installationData", JSON.stringify(parsedData))
+      localStorage.setItem(
+        "customerInfo",
+        JSON.stringify({
+          customerName,
+          propertyName,
+          address,
+          city,
+          state,
+          zip,
+          date: new Date().toLocaleDateString(),
+        }),
+      )
+
+      // Navigate to report page
+      router.push("/report")
+    } catch (error) {
+      console.error("Error parsing file:", error)
+      alert(error instanceof Error ? error.message : "An error occurred while processing the file")
+      setLoading(false)
+    }
   }
 
   return (
@@ -126,8 +143,10 @@ export default function Home() {
 
             <div className="space-y-2">
               <h2 className="text-xl font-semibold">Installation Data</h2>
-              <p className="text-sm text-muted-foreground">Upload the CSV file containing installation data.</p>
-              <Input id="csvFile" type="file" accept=".csv" onChange={handleFileChange} required />
+              <p className="text-sm text-muted-foreground">
+                Upload the CSV or Excel file containing installation data.
+              </p>
+              <Input id="csvFile" type="file" accept=".csv,.xlsx,.xls" onChange={handleFileChange} required />
             </div>
 
             <Button type="submit" className="w-full" disabled={loading}>
@@ -136,8 +155,6 @@ export default function Home() {
           </form>
         </CardContent>
       </Card>
-
-
     </div>
   )
 }
