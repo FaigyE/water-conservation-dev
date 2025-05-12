@@ -134,7 +134,7 @@ export default function ReportPage() {
     )
   }
 
-  // Group notes for the notes pages
+  // Group notes for the notes pages - only include leak issues
   const notes = filteredData
     .filter(
       (item) =>
@@ -153,6 +153,7 @@ export default function ReportPage() {
         note: noteText.trim(),
       }
     })
+    .filter((note) => note.note !== "") // Remove notes that are empty after filtering
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -193,16 +194,16 @@ export default function ReportPage() {
           </TabsContent>
 
           <TabsContent value="notes">
-            <ReportNotesPage notes={notes} />
+            <ReportNotesPage notes={notes} isPreview={true} />
           </TabsContent>
 
           <TabsContent value="details">
-            <ReportDetailPage installationData={filteredData} />
+            <ReportDetailPage installationData={filteredData} isPreview={true} />
           </TabsContent>
         </Tabs>
       </div>
 
-      {/* Hidden content for printing */}
+      {/* Hidden content for printing - using the same components as the preview */}
       <div className="hidden print-content">
         <div className="report-page">
           <ReportCoverPage customerInfo={customerInfo} />
@@ -212,13 +213,9 @@ export default function ReportPage() {
           <ReportLetterPage customerInfo={customerInfo} toiletCount={toiletCount} />
         </div>
         <div className="page-break"></div>
-        <div className="report-page">
-          <ReportNotesPage notes={notes} />
-        </div>
+        <ReportNotesPage notes={notes} isPreview={false} />
         <div className="page-break"></div>
-        <div className="report-page">
-          <ReportDetailPage installationData={filteredData} />
-        </div>
+        <ReportDetailPage installationData={filteredData} isPreview={false} />
       </div>
     </div>
   )

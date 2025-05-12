@@ -14,9 +14,10 @@ interface InstallationData {
 
 interface ReportDetailPageProps {
   installationData: InstallationData[]
+  isPreview?: boolean
 }
 
-export default function ReportDetailPage({ installationData }: ReportDetailPageProps) {
+export default function ReportDetailPage({ installationData, isPreview = true }: ReportDetailPageProps) {
   // Filter out rows without valid unit/apartment numbers
   const filteredData = installationData.filter((item) => {
     // Check if Unit exists and is not empty
@@ -223,7 +224,123 @@ export default function ReportDetailPage({ installationData }: ReportDetailPageP
     hasNotes,
   })
 
-  return (
+  return isPreview ? (
+    // Preview mode - show all data in one continuous list
+    <div className="report-page min-h-[1056px] relative">
+      {/* Header with logo - made bigger */}
+      <div className="mb-8">
+        <img
+          src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Screenshot%202025-04-29%20115501-BD1uw5tVq9PtVYW6Z6FKM1i8in6GeV.png"
+          alt="GreenLight Logo"
+          className="h-24" // Increased from h-16
+          crossOrigin="anonymous"
+        />
+      </div>
+
+      {/* Detail content */}
+      <div className="mb-16">
+        <h2 className="text-xl font-bold mb-6">Detailed Unit Information</h2>
+
+        <table className="w-full text-sm">
+          <thead>
+            <tr>
+              <th className="text-left py-2 px-2 border-b">Unit</th>
+              {hasKitchenAerators && <th className="text-left py-2 px-2 border-b">Kitchen</th>}
+              {hasBathroomAerators && <th className="text-left py-2 px-2 border-b">Bathroom</th>}
+              {hasShowers && <th className="text-left py-2 px-2 border-b">Shower</th>}
+              {hasToilets && <th className="text-left py-2 px-2 border-b">Toilet</th>}
+              {hasNotes && <th className="text-left py-2 px-2 border-b">Notes</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {filteredData.map((item, index) => {
+              // Check if this is a special unit (shower room, office, etc.)
+              const isSpecialUnit =
+                item.Unit.toLowerCase().includes("shower") ||
+                item.Unit.toLowerCase().includes("office") ||
+                item.Unit.toLowerCase().includes("laundry")
+
+              // Get aerator descriptions using the found column names
+              const kitchenAerator =
+                isSpecialUnit || !kitchenAeratorColumn
+                  ? ""
+                  : getAeratorDescription(item[kitchenAeratorColumn], "kitchen")
+
+              const bathroomAerator = !bathroomAeratorColumn
+                ? ""
+                : getAeratorDescription(item[bathroomAeratorColumn], "bathroom")
+
+              const shower = !showerHeadColumn ? "" : getAeratorDescription(item[showerHeadColumn], "shower")
+
+              // Check both possible column names for toilet installation
+              const toilet = hasToiletInstalled(item) ? "0.8 GPF" : ""
+
+              // Update the notes compilation section in the table row rendering
+              // Compile notes with proper sentence case - only include leak issues
+              let notes = ""
+              if (item["Leak Issue Kitchen Faucet"]) notes += "Dripping from kitchen faucet. "
+              if (item["Leak Issue Bath Faucet"]) notes += "Dripping from bathroom faucet. "
+              if (item["Tub Spout/Diverter Leak Issue"] === "Light") notes += "Light leak from tub spout/diverter. "
+              if (item["Tub Spout/Diverter Leak Issue"] === "Moderate")
+                notes += "Moderate leak from tub spout/diverter. "
+              if (item["Tub Spout/Diverter Leak Issue"] === "Heavy") notes += "Heavy leak from tub spout/diverter. "
+
+              // Check if all installation columns are blank
+              const isUnitNotAccessed =
+                (!kitchenAeratorColumn ||
+                  item[kitchenAeratorColumn] === "" ||
+                  item[kitchenAeratorColumn] === undefined) &&
+                (!bathroomAeratorColumn ||
+                  item[bathroomAeratorColumn] === "" ||
+                  item[bathroomAeratorColumn] === undefined) &&
+                (!showerHeadColumn || item[showerHeadColumn] === "" || item[showerHeadColumn] === undefined) &&
+                !hasToiletInstalled(item)
+
+              // If unit not accessed and no other notes, add that information
+              if (isUnitNotAccessed && !notes) {
+                notes = "Unit not accessed."
+              }
+
+              // Format the notes with proper sentence case
+              notes = formatNote(notes)
+
+              return (
+                <tr key={index}>
+                  <td className="py-2 px-2 border-b">{item.Unit}</td>
+                  {hasKitchenAerators && (
+                    <td className="py-2 px-2 border-b text-center">
+                      {kitchenAerator === "No Touch." ? "—" : kitchenAerator}
+                    </td>
+                  )}
+                  {hasBathroomAerators && (
+                    <td className="py-2 px-2 border-b text-center">
+                      {bathroomAerator === "No Touch." ? "—" : bathroomAerator}
+                    </td>
+                  )}
+                  {hasShowers && (
+                    <td className="py-2 px-2 border-b text-center">{shower === "No Touch." ? "—" : shower}</td>
+                  )}
+                  {hasToilets && <td className="py-2 px-2 border-b text-center">{toilet || "—"}</td>}
+                  {hasNotes && <td className="py-2 px-2 border-b">{notes.trim()}</td>}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Footer - full width */}
+      <div className="footer-container">
+        <img
+          src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Screenshot%202025-04-29%20115454-uWCS2yWrowegSqw9c2SIVcLdedTk82.png"
+          alt="GreenLight Footer"
+          className="w-full h-auto"
+          crossOrigin="anonymous"
+        />
+      </div>
+    </div>
+  ) : (
+    // PDF/Print mode - paginate the data
     <>
       {dataPages.map((pageData, pageIndex) => (
         <div key={pageIndex} className="report-page min-h-[1056px] relative">
@@ -239,7 +356,7 @@ export default function ReportDetailPage({ installationData }: ReportDetailPageP
 
           {/* Detail content */}
           <div className="mb-16">
-            <h2 className="text-xl font-bold mb-6">Detailed Apartment Information</h2>
+            <h2 className="text-xl font-bold mb-6">Detailed Unit Information</h2>
 
             <table className="w-full text-sm">
               <thead>
@@ -273,10 +390,10 @@ export default function ReportDetailPage({ installationData }: ReportDetailPageP
                   const shower = !showerHeadColumn ? "" : getAeratorDescription(item[showerHeadColumn], "shower")
 
                   // Check both possible column names for toilet installation
-                  const toilet = hasToiletInstalled(item) ? "Yes" : ""
+                  const toilet = hasToiletInstalled(item) ? "0.8 GPF" : ""
 
                   // Update the notes compilation section in the table row rendering
-                  // Compile notes with proper sentence case
+                  // Compile notes with proper sentence case - only include leak issues
                   let notes = ""
                   if (item["Leak Issue Kitchen Faucet"]) notes += "Dripping from kitchen faucet. "
                   if (item["Leak Issue Bath Faucet"]) notes += "Dripping from bathroom faucet. "
@@ -284,7 +401,22 @@ export default function ReportDetailPage({ installationData }: ReportDetailPageP
                   if (item["Tub Spout/Diverter Leak Issue"] === "Moderate")
                     notes += "Moderate leak from tub spout/diverter. "
                   if (item["Tub Spout/Diverter Leak Issue"] === "Heavy") notes += "Heavy leak from tub spout/diverter. "
-                  if (item.Notes) notes += item.Notes
+
+                  // Check if all installation columns are blank
+                  const isUnitNotAccessed =
+                    (!kitchenAeratorColumn ||
+                      item[kitchenAeratorColumn] === "" ||
+                      item[kitchenAeratorColumn] === undefined) &&
+                    (!bathroomAeratorColumn ||
+                      item[bathroomAeratorColumn] === "" ||
+                      item[bathroomAeratorColumn] === undefined) &&
+                    (!showerHeadColumn || item[showerHeadColumn] === "" || item[showerHeadColumn] === undefined) &&
+                    !hasToiletInstalled(item)
+
+                  // If unit not accessed and no other notes, add that information
+                  if (isUnitNotAccessed && !notes) {
+                    notes = "Unit not accessed."
+                  }
 
                   // Format the notes with proper sentence case
                   notes = formatNote(notes)
@@ -293,13 +425,19 @@ export default function ReportDetailPage({ installationData }: ReportDetailPageP
                     <tr key={index}>
                       <td className="py-2 px-2 border-b">{item.Unit}</td>
                       {hasKitchenAerators && (
-                        <td className="py-2 px-2 border-b">{kitchenAerator === "No Touch." ? "" : kitchenAerator}</td>
+                        <td className="py-2 px-2 border-b text-center">
+                          {kitchenAerator === "No Touch." ? "—" : kitchenAerator}
+                        </td>
                       )}
                       {hasBathroomAerators && (
-                        <td className="py-2 px-2 border-b">{bathroomAerator === "No Touch." ? "" : bathroomAerator}</td>
+                        <td className="py-2 px-2 border-b text-center">
+                          {bathroomAerator === "No Touch." ? "—" : bathroomAerator}
+                        </td>
                       )}
-                      {hasShowers && <td className="py-2 px-2 border-b">{shower === "No Touch." ? "" : shower}</td>}
-                      {hasToilets && <td className="py-2 px-2 border-b">{toilet}</td>}
+                      {hasShowers && (
+                        <td className="py-2 px-2 border-b text-center">{shower === "No Touch." ? "—" : shower}</td>
+                      )}
+                      {hasToilets && <td className="py-2 px-2 border-b text-center">{toilet || "—"}</td>}
                       {hasNotes && <td className="py-2 px-2 border-b">{notes.trim()}</td>}
                     </tr>
                   )

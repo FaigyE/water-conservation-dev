@@ -34,7 +34,13 @@ export const getAeratorDescription = (value: string, type: string) => {
     // If the text already includes GPM, use it as is
     if (value.toLowerCase().includes("gpm")) return value
 
-    // For specific text descriptions, return standard GPM value without the description
+    // For specific text descriptions, return standard GPM value
+    const lowerValue = value.toLowerCase()
+    if (lowerValue.includes("male") || lowerValue.includes("female") || lowerValue.includes("insert")) {
+      return type === "shower" ? "1.75 GPM" : "1.0 GPM"
+    }
+
+    // For other descriptions that indicate installation
     return type === "shower" ? "1.75 GPM" : "1.0 GPM"
   }
 

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { FileDown } from "lucide-react"
 import type { CustomerInfo, InstallationData, Note } from "@/lib/types"
 // Import the formatNote function
-import { getAeratorDescription, formatNote } from "@/lib/utils/aerator-helpers"
+import { getAeratorDescription } from "@/lib/utils/aerator-helpers"
 
 interface EnhancedPdfButtonProps {
   customerInfo: CustomerInfo
@@ -26,6 +26,8 @@ export default function EnhancedPdfButton({
   const [footerLoaded, setFooterLoaded] = useState(false)
   const [logoImage, setLogoImage] = useState<string | null>(null)
   const [footerImage, setFooterImage] = useState<{ dataUrl: string; width: number; height: number } | null>(null)
+  const [signatureLoaded, setSignatureLoaded] = useState(false)
+  const [signatureImage, setSignatureImage] = useState<string | null>(null)
 
   useEffect(() => {
     // Load jsPDF dynamically
@@ -69,6 +71,21 @@ export default function EnhancedPdfButton({
     footerImg.src =
       "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Screenshot%202025-04-29%20115454-uWCS2yWrowegSqw9c2SIVcLdedTk82.png"
 
+    // Load signature image
+    const signatureImg = new Image()
+    signatureImg.crossOrigin = "anonymous"
+    signatureImg.onload = () => {
+      const canvas = document.createElement("canvas")
+      canvas.width = signatureImg.width
+      canvas.height = signatureImg.height
+      const ctx = canvas.getContext("2d")
+      ctx?.drawImage(signatureImg, 0, 0)
+      setSignatureImage(canvas.toDataURL("image/png"))
+      setSignatureLoaded(true)
+    }
+    signatureImg.src =
+      "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-VtZjpVdUqjQTct2lQsw6FsvfgvFeiU.png"
+
     return () => {
       if (document.body.contains(script)) {
         document.body.removeChild(script)
@@ -76,7 +93,7 @@ export default function EnhancedPdfButton({
     }
   }, [])
 
-  // Filter out rows without valid unit/apartment numbers
+  // Filter out rows without valid unit numbers
   const filteredData = installationData.filter((item) => {
     // Check if Unit exists and is not empty
     if (!item.Unit || item.Unit.trim() === "") return false
@@ -353,9 +370,19 @@ export default function EnhancedPdfButton({
         yPos += 5
       })
 
-      yPos += 10
+      // Add signature
+      yPos += 5 // Reduced from 10
       doc.text("Very truly yours,", 15, yPos)
-      yPos += 20
+      yPos += 10 // Reduced from 20
+
+      // Add signature image
+      if (signatureImage) {
+        doc.addImage(signatureImage, "PNG", 15, yPos, 40, 15) // Adjust width and height as needed
+        yPos += 15 // Reduced from 20
+      } else {
+        yPos += 5 // Reduced from 10
+      }
+
       doc.text("Zev Stern, CWEP", 15, yPos)
       yPos += 7
       doc.text("Chief Operating Officer", 15, yPos)
@@ -571,7 +598,7 @@ export default function EnhancedPdfButton({
         currentPage++
 
         doc.setFontSize(18)
-        doc.text("Detailed Apartment Information", 105, contentStartY, { align: "center" })
+        doc.text("Detailed Unit Information", 105, contentStartY, { align: "center" })
 
         // Create table header - add more space after the title
         yPos = contentStartY + 10 // Add 10mm after the title
@@ -631,10 +658,10 @@ export default function EnhancedPdfButton({
           const showerHead = !showerHeadColumn ? "" : getAeratorDescription(item[showerHeadColumn], "shower")
 
           // Check both possible column names for toilet installation
-          const toilet = hasToiletInstalled(item) ? "Yes" : ""
+          const toilet = hasToiletInstalled(item) ? "0.8 GPF" : ""
 
           // Update the notes compilation in the PDF generation
-          // Compile notes with proper sentence case
+          // Compile notes with proper sentence case - only include leak issues
           let noteText = ""
           if (item["Leak Issue Kitchen Faucet"]) noteText += "Dripping from kitchen faucet. "
           if (item["Leak Issue Bath Faucet"]) noteText += "Dripping from bathroom faucet. "
@@ -642,10 +669,20 @@ export default function EnhancedPdfButton({
           if (item["Tub Spout/Diverter Leak Issue"] === "Moderate")
             noteText += "Moderate leak from tub spout/diverter. "
           if (item["Tub Spout/Diverter Leak Issue"] === "Heavy") noteText += "Heavy leak from tub spout/diverter. "
-          if (item.Notes) noteText += item.Notes
 
-          // Format the notes with proper sentence case
-          noteText = formatNote(noteText)
+          // Check if all installation columns are blank
+          const isUnitNotAccessed =
+            (!kitchenAeratorColumn || item[kitchenAeratorColumn] === "" || item[kitchenAeratorColumn] === undefined) &&
+            (!bathroomAeratorColumn ||
+              item[bathroomAeratorColumn] === "" ||
+              item[bathroomAeratorColumn] === undefined) &&
+            (!showerHeadColumn || item[showerHeadColumn] === "" || item[showerHeadColumn] === undefined) &&
+            !hasToiletInstalled(item)
+
+          // If unit not accessed and no other notes, add that information
+          if (isUnitNotAccessed && !noteText) {
+            noteText = "Unit not accessed."
+          }
 
           // Calculate how many lines the note will take
           let noteLines: string[] = []
@@ -677,16 +714,32 @@ export default function EnhancedPdfButton({
           doc.text(item.Unit, columnPositions[colIndex++], yPos)
 
           if (hasKitchenAerators) {
-            doc.text(kitchenAerator === "No Touch." ? "" : kitchenAerator, columnPositions[colIndex++], yPos)
+            const kitchenText = kitchenAerator === "No Touch." ? "—" : kitchenAerator
+            doc.text(kitchenText, columnPositions[colIndex], yPos, {
+              align: kitchenText === "—" ? "center" : "left",
+            })
+            colIndex++
           }
           if (hasBathroomAerators) {
-            doc.text(bathroomAerator === "No Touch." ? "" : bathroomAerator, columnPositions[colIndex++], yPos)
+            const bathroomText = bathroomAerator === "No Touch." ? "—" : bathroomAerator
+            doc.text(bathroomText, columnPositions[colIndex], yPos, {
+              align: bathroomText === "—" ? "center" : "left",
+            })
+            colIndex++
           }
           if (hasShowers) {
-            doc.text(showerHead === "No Touch." ? "" : showerHead, columnPositions[colIndex++], yPos)
+            const showerText = showerHead === "No Touch." ? "—" : showerHead
+            doc.text(showerText, columnPositions[colIndex], yPos, {
+              align: showerText === "—" ? "center" : "left",
+            })
+            colIndex++
           }
           if (hasToilets) {
-            doc.text(toilet, columnPositions[colIndex++], yPos)
+            const toiletText = toilet ? toilet : "—"
+            doc.text(toiletText, columnPositions[colIndex], yPos, {
+              align: toiletText === "—" ? "center" : "left",
+            })
+            colIndex++
           }
 
           // Handle notes with wrapping if needed
@@ -732,7 +785,7 @@ export default function EnhancedPdfButton({
     }
   }
 
-  const allLoaded = jsPDFLoaded && logoLoaded && footerLoaded
+  const allLoaded = jsPDFLoaded && logoLoaded && footerLoaded && signatureLoaded
 
   return (
     <Button onClick={handleGeneratePdf} disabled={isGenerating || !allLoaded}>
@@ -741,9 +794,12 @@ export default function EnhancedPdfButton({
         ? "Generating PDF..."
         : allLoaded
           ? "Download Complete PDF"
-          : `Loading PDF Generator (${[jsPDFLoaded ? "✓" : "✗", logoLoaded ? "✓" : "✗", footerLoaded ? "✓" : "✗"].join(
-              " ",
-            )})`}
+          : `Loading PDF Generator (${[
+              jsPDFLoaded ? "✓" : "✗",
+              logoLoaded ? "✓" : "✗",
+              footerLoaded ? "✓" : "✗",
+              signatureLoaded ? "✓" : "✗",
+            ].join(" ")})`}
     </Button>
   )
 }

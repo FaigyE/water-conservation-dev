@@ -4,6 +4,10 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Printer } from "lucide-react"
 import type { CustomerInfo, InstallationData, Note } from "@/lib/types"
+import ReportCoverPage from "@/components/report-cover-page"
+import ReportLetterPage from "@/components/report-letter-page"
+import ReportNotesPage from "@/components/report-notes-page"
+import ReportDetailPage from "@/components/report-detail-page"
 
 interface PrintButtonProps {
   customerInfo: CustomerInfo
@@ -40,16 +44,6 @@ export default function PrintButton({ customerInfo, installationData, toiletCoun
         }
       })
       .join("\n")
-
-    // Create the content for the print window
-    const printContent = document.querySelector(".print-content")
-
-    if (!printContent) {
-      alert("Print content not found")
-      printWindow.close()
-      setIsPrinting(false)
-      return
-    }
 
     // Write the content to the new window
     printWindow.document.write(`
@@ -104,6 +98,10 @@ export default function PrintButton({ customerInfo, installationData, toiletCoun
               text-align: left;
             }
             
+            td.text-center {
+              text-align: center;
+            }
+            
             img {
               max-width: 100%;
             }
@@ -122,9 +120,7 @@ export default function PrintButton({ customerInfo, installationData, toiletCoun
           </style>
         </head>
         <body>
-          <div class="print-container">
-            ${printContent.innerHTML}
-          </div>
+          <div id="print-container"></div>
           <script>
             // Wait for images to load before printing
             window.onload = function() {
@@ -139,6 +135,97 @@ export default function PrintButton({ customerInfo, installationData, toiletCoun
         </body>
       </html>
     `)
+
+    // Render the components directly in the print window
+    const renderInPrintWindow = () => {
+      // Get the container
+      const container = printWindow.document.getElementById("print-container")
+      if (!container) return
+
+      // Create a temporary div to hold our rendered content
+      const tempDiv = document.createElement("div")
+
+      // Render each page
+      const coverPage = document.createElement("div")
+      coverPage.className = "report-page"
+      const coverPageComponent = <ReportCoverPage customerInfo={customerInfo} />
+      // Use ReactDOM to render the component to the div
+      if (typeof window !== "undefined" && window.ReactDOM) {
+        window.ReactDOM.render(coverPageComponent, coverPage)
+        tempDiv.appendChild(coverPage)
+      }
+
+      // Add page break
+      const pageBreak1 = document.createElement("div")
+      pageBreak1.className = "page-break"
+      tempDiv.appendChild(pageBreak1)
+
+      // Letter page
+      const letterPage = document.createElement("div")
+      letterPage.className = "report-page"
+      const letterPageComponent = <ReportLetterPage customerInfo={customerInfo} toiletCount={toiletCount} />
+      if (typeof window !== "undefined" && window.ReactDOM) {
+        window.ReactDOM.render(letterPageComponent, letterPage)
+        tempDiv.appendChild(letterPage)
+      }
+
+      // Add page break
+      const pageBreak2 = document.createElement("div")
+      pageBreak2.className = "page-break"
+      tempDiv.appendChild(pageBreak2)
+
+      // Notes page
+      const notesPage = document.createElement("div")
+      notesPage.className = "report-page"
+      const notesPageComponent = <ReportNotesPage notes={notes} isPreview={false} />
+      if (typeof window !== "undefined" && window.ReactDOM) {
+        window.ReactDOM.render(notesPageComponent, notesPage)
+        tempDiv.appendChild(notesPage)
+      }
+
+      // Add page break
+      const pageBreak3 = document.createElement("div")
+      pageBreak3.className = "page-break"
+      tempDiv.appendChild(pageBreak3)
+
+      // Details page
+      const detailsPage = document.createElement("div")
+      detailsPage.className = "report-page"
+      const detailsPageComponent = <ReportDetailPage installationData={installationData} isPreview={false} />
+      if (typeof window !== "undefined" && window.ReactDOM) {
+        window.ReactDOM.render(detailsPageComponent, detailsPage)
+        tempDiv.appendChild(detailsPage)
+      }
+
+      // Append to container
+      container.innerHTML = tempDiv.innerHTML
+    }
+
+    // Try to use ReactDOM to render components, but fall back to innerHTML if not available
+    try {
+      if (typeof window !== "undefined" && window.ReactDOM) {
+        renderInPrintWindow()
+      } else {
+        // Fallback to using the hidden print content
+        const printContent = document.querySelector(".print-content")
+        if (printContent) {
+          const container = printWindow.document.getElementById("print-container")
+          if (container) {
+            container.innerHTML = printContent.innerHTML
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error rendering print content:", error)
+      // Fallback to using the hidden print content
+      const printContent = document.querySelector(".print-content")
+      if (printContent) {
+        const container = printWindow.document.getElementById("print-container")
+        if (container) {
+          container.innerHTML = printContent.innerHTML
+        }
+      }
+    }
 
     printWindow.document.close()
 

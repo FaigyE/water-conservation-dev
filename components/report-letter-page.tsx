@@ -48,7 +48,18 @@ export default function ReportLetterPage({ customerInfo, toiletCount }: ReportLe
         </p>
 
         <p className="mb-1">Very truly yours,</p>
-        <p className="mb-1 mt-8">Zev Stern, CWEP</p>
+
+        {/* Add signature image */}
+        <div className="my-2">
+          <img
+            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-VtZjpVdUqjQTct2lQsw6FsvfgvFeiU.png"
+            alt="Signature"
+            className="h-10 ml-1" // Reduced from h-16 to h-10
+            crossOrigin="anonymous"
+          />
+        </div>
+
+        <p className="mb-1">Zev Stern, CWEP</p>
         <p>Chief Operating Officer</p>
       </div>
 

@@ -21,6 +21,7 @@ export default function Home() {
   const [state, setState] = useState("")
   const [zip, setZip] = useState("")
   const [loading, setLoading] = useState(false)
+  const [unitType, setUnitType] = useState("Unit")
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -67,6 +68,7 @@ export default function Home() {
           state,
           zip,
           date: new Date().toLocaleDateString(),
+          unitType,
         }),
       )
 
@@ -115,6 +117,36 @@ export default function Home() {
                     onChange={(e) => setPropertyName(e.target.value)}
                     required
                   />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="unitType">Unit Type</Label>
+                <div className="flex space-x-4">
+                  <div className="flex items-center">
+                    <input
+                      type="radio"
+                      id="unitTypeUnit"
+                      name="unitType"
+                      value="Unit"
+                      checked={unitType === "Unit"}
+                      onChange={(e) => setUnitType(e.target.value)}
+                      className="mr-2"
+                    />
+                    <Label htmlFor="unitTypeUnit">Unit</Label>
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="radio"
+                      id="unitTypeRoom"
+                      name="unitType"
+                      value="Room"
+                      checked={unitType === "Room"}
+                      onChange={(e) => setUnitType(e.target.value)}
+                      className="mr-2"
+                    />
+                    <Label htmlFor="unitTypeRoom">Room</Label>
+                  </div>
                 </div>
               </div>
 

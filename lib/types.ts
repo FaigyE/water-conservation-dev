@@ -6,6 +6,7 @@ export interface CustomerInfo {
   state: string
   zip: string
   date: string
+  unitType?: string
 }
 
 export interface InstallationData {

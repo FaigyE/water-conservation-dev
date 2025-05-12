@@ -5,9 +5,10 @@ interface Note {
 
 interface ReportNotesPageProps {
   notes: Note[]
+  isPreview?: boolean
 }
 
-export default function ReportNotesPage({ notes }: ReportNotesPageProps) {
+export default function ReportNotesPage({ notes, isPreview = true }: ReportNotesPageProps) {
   // Filter out notes without valid unit numbers
   const filteredNotes = notes.filter((note) => {
     if (!note.unit || note.unit.trim() === "") return false
@@ -27,7 +28,53 @@ export default function ReportNotesPage({ notes }: ReportNotesPageProps) {
     notePages.push(filteredNotes.slice(i, i + notesPerPage))
   }
 
-  return (
+  return isPreview ? (
+    // Preview mode - show all notes in one continuous list
+    <div className="report-page min-h-[1056px] relative">
+      {/* Header with logo - made bigger and higher up */}
+      <div className="mb-8">
+        <img
+          src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Screenshot%202025-04-29%20115501-BD1uw5tVq9PtVYW6Z6FKM1i8in6GeV.png"
+          alt="GreenLight Logo"
+          className="h-24" // Increased from h-16
+          crossOrigin="anonymous"
+        />
+      </div>
+
+      {/* Notes content */}
+      <div className="mb-16">
+        <h2 className="text-xl font-bold mb-6">Notes</h2>
+
+        <table className="w-full">
+          <thead>
+            <tr>
+              <th className="text-left py-2 px-4 border-b">Unit</th>
+              <th className="text-left py-2 px-4 border-b">Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredNotes.map((note, index) => (
+              <tr key={index}>
+                <td className="py-2 px-4 border-b">{note.unit}</td>
+                <td className="py-2 px-4 border-b">{note.note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Footer - full width */}
+      <div className="footer-container">
+        <img
+          src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Screenshot%202025-04-29%20115454-uWCS2yWrowegSqw9c2SIVcLdedTk82.png"
+          alt="GreenLight Footer"
+          className="w-full h-auto"
+          crossOrigin="anonymous"
+        />
+      </div>
+    </div>
+  ) : (
+    // PDF/Print mode - paginate the notes
     <>
       {notePages.map((pageNotes, pageIndex) => (
         <div key={pageIndex} className="report-page min-h-[1056px] relative">

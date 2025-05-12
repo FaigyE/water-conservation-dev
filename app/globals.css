@@ -118,8 +118,29 @@
 
   /* Ensure tables don't break across pages */
   table {
+    width: 100%;
+    border-collapse: collapse;
     page-break-inside: avoid;
     break-inside: avoid;
+  }
+
+  /* Table styling to match preview */
+  th,
+  td {
+    border-bottom: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+  }
+
+  td.text-center,
+  th.text-center,
+  td[align="center"] {
+    text-align: center;
+  }
+
+  /* Ensure em dashes are centered */ \
+  td:contains("—") {
+    text-align: center;
   }
 
   /* Ensure images print properly */
