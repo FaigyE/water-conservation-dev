@@ -1,4 +1,8 @@
+"use client"
+import { useState, useEffect } from "react"
+import EditableText from "@/components/editable-text"
 import { getAeratorDescription, formatNote } from "@/lib/utils/aerator-helpers"
+import { useReportContext } from "@/lib/report-context"
 
 interface InstallationData {
   Unit: string
@@ -15,9 +19,39 @@ interface InstallationData {
 interface ReportDetailPageProps {
   installationData: InstallationData[]
   isPreview?: boolean
+  isEditable?: boolean
 }
 
-export default function ReportDetailPage({ installationData, isPreview = true }: ReportDetailPageProps) {
+// Create a new interface for storing edited notes
+interface EditedNote {
+  unit: string
+  note: string
+}
+
+export default function ReportDetailPage({
+  installationData,
+  isPreview = true,
+  isEditable = true,
+}: ReportDetailPageProps) {
+  const { setHasUnsavedChanges, sectionTitles, setSectionTitles } = useReportContext()
+
+  // State to store edited notes
+  const [editedNotes, setEditedNotes] = useState<Record<string, string>>({})
+
+  // Update the state to track edited values for all columns
+  // Add after the editedNotes state declaration
+  const [editedInstallations, setEditedInstallations] = useState<Record<string, Record<string, string>>>({})
+
+  // Add state for column headers
+  const [columnHeaders, setColumnHeaders] = useState({
+    unit: "Unit",
+    kitchen: "Kitchen",
+    bathroom: "Bathroom",
+    shower: "Shower",
+    toilet: "Toilet",
+    notes: "Notes",
+  })
+
   // Filter out rows without valid unit/apartment numbers
   const filteredData = installationData.filter((item) => {
     // Check if Unit exists and is not empty
@@ -57,10 +91,6 @@ export default function ReportDetailPage({ installationData, isPreview = true }:
   const hasToiletInstalled = (item: InstallationData): boolean => {
     return getToiletColumnInfo(item).installed
   }
-
-  // Update the findColumnName function to be more robust and add more debugging
-
-  // Update the findColumnName function to be more robust for both CSV and Excel files
 
   // Replace the findColumnName function with this improved version
   const findColumnName = (possibleNames: string[]): string | null => {
@@ -224,6 +254,127 @@ export default function ReportDetailPage({ installationData, isPreview = true }:
     hasNotes,
   })
 
+  // Function to handle note edits
+  const handleNoteEdit = (unit: string, value: string) => {
+    if (isEditable) {
+      setEditedNotes((prev) => {
+        const updated = { ...prev, [unit]: value }
+        console.log(`Updated note for unit ${unit} to "${value}"`, updated)
+        return updated
+      })
+      setHasUnsavedChanges(true)
+
+      // Save to localStorage immediately to persist changes
+      const storedNotes = localStorage.getItem("detailNotes")
+      const parsedNotes = storedNotes ? JSON.parse(storedNotes) : {}
+      const updatedNotes = { ...parsedNotes, [unit]: value }
+      localStorage.setItem("detailNotes", JSON.stringify(updatedNotes))
+    }
+  }
+
+  // Add a function to handle installation edits
+  // Add after the handleNoteEdit function
+  const handleInstallationEdit = (unit: string, column: string, value: string) => {
+    if (isEditable) {
+      setEditedInstallations((prev) => {
+        // Create unit entry if it doesn't exist
+        const unitData = prev[unit] || {}
+        const updated = {
+          ...prev,
+          [unit]: {
+            ...unitData,
+            [column]: value,
+          },
+        }
+        console.log(`Updated ${column} for unit ${unit} to "${value}"`, updated)
+
+        // Save to localStorage immediately
+        localStorage.setItem("detailInstallations", JSON.stringify(updated))
+
+        return updated
+      })
+      setHasUnsavedChanges(true)
+    }
+  }
+
+  // Handle section title change
+  const handleSectionTitleChange = (value: string) => {
+    if (isEditable) {
+      setSectionTitles((prev) => {
+        const updated = { ...prev, detailsTitle: value }
+        console.log(`Updated details section title to "${value}"`, updated)
+
+        // Save to localStorage immediately
+        localStorage.setItem("sectionTitles", JSON.stringify(updated))
+
+        return updated
+      })
+      setHasUnsavedChanges(true)
+    }
+  }
+
+  // Handle column header change
+  const handleColumnHeaderChange = (column: string, value: string) => {
+    if (isEditable) {
+      setColumnHeaders((prev) => {
+        const updated = { ...prev, [column]: value }
+        console.log(`Updated ${column} column header to "${value}"`, updated)
+
+        // Save to localStorage immediately
+        localStorage.setItem("columnHeaders", JSON.stringify(updated))
+
+        return updated
+      })
+      setHasUnsavedChanges(true)
+    }
+  }
+
+  // Load edited notes from localStorage on component mount
+  useEffect(() => {
+    const storedNotes = localStorage.getItem("detailNotes")
+    if (storedNotes) {
+      try {
+        const parsedNotes = JSON.parse(storedNotes)
+        setEditedNotes(parsedNotes)
+        console.log("Loaded edited notes from localStorage:", parsedNotes)
+      } catch (error) {
+        console.error("Error parsing stored notes:", error)
+      }
+    }
+  }, [])
+
+  // Add useEffect to load edited installations from localStorage
+  // Add after the useEffect for loading edited notes
+  useEffect(() => {
+    const storedInstallations = localStorage.getItem("detailInstallations")
+    if (storedInstallations) {
+      try {
+        const parsedInstallations = JSON.parse(storedInstallations)
+        setEditedInstallations(parsedInstallations)
+        console.log("Loaded edited installations from localStorage:", parsedInstallations)
+      } catch (error) {
+        console.error("Error parsing stored installations:", error)
+      }
+    }
+  }, [])
+
+  // Load column headers from localStorage
+  useEffect(() => {
+    const storedHeaders = localStorage.getItem("columnHeaders")
+    if (storedHeaders) {
+      try {
+        const parsedHeaders = JSON.parse(storedHeaders)
+        setColumnHeaders(parsedHeaders)
+        console.log("Loaded column headers from localStorage:", parsedHeaders)
+      } catch (error) {
+        console.error("Error parsing stored column headers:", error)
+      }
+    }
+  }, [])
+
+  // Get the section title from context or use default
+  const detailsTitle = sectionTitles.detailsTitle || "Detailed Unit Information"
+
   return isPreview ? (
     // Preview mode - show all data in one continuous list
     <div className="report-page min-h-[1056px] relative">
@@ -239,17 +390,98 @@ export default function ReportDetailPage({ installationData, isPreview = true }:
 
       {/* Detail content */}
       <div className="mb-16">
-        <h2 className="text-xl font-bold mb-6">Detailed Unit Information</h2>
+        <h2 className="text-xl font-bold mb-6">
+          {isEditable ? (
+            <EditableText
+              value={detailsTitle}
+              onChange={handleSectionTitleChange}
+              placeholder="Section Title"
+              className="text-xl font-bold"
+            />
+          ) : (
+            detailsTitle
+          )}
+        </h2>
 
         <table className="w-full text-sm">
           <thead>
             <tr>
-              <th className="text-left py-2 px-2 border-b">Unit</th>
-              {hasKitchenAerators && <th className="text-left py-2 px-2 border-b">Kitchen</th>}
-              {hasBathroomAerators && <th className="text-left py-2 px-2 border-b">Bathroom</th>}
-              {hasShowers && <th className="text-left py-2 px-2 border-b">Shower</th>}
-              {hasToilets && <th className="text-left py-2 px-2 border-b">Toilet</th>}
-              {hasNotes && <th className="text-left py-2 px-2 border-b">Notes</th>}
+              <th className="text-left py-2 px-2 border-b">
+                {isEditable ? (
+                  <EditableText
+                    value={columnHeaders.unit}
+                    onChange={(value) => handleColumnHeaderChange("unit", value)}
+                    placeholder="Unit"
+                  />
+                ) : (
+                  columnHeaders.unit
+                )}
+              </th>
+              {hasKitchenAerators && (
+                <th className="text-left py-2 px-2 border-b">
+                  {isEditable ? (
+                    <EditableText
+                      value={columnHeaders.kitchen}
+                      onChange={(value) => handleColumnHeaderChange("kitchen", value)}
+                      placeholder="Kitchen"
+                    />
+                  ) : (
+                    columnHeaders.kitchen
+                  )}
+                </th>
+              )}
+              {hasBathroomAerators && (
+                <th className="text-left py-2 px-2 border-b">
+                  {isEditable ? (
+                    <EditableText
+                      value={columnHeaders.bathroom}
+                      onChange={(value) => handleColumnHeaderChange("bathroom", value)}
+                      placeholder="Bathroom"
+                    />
+                  ) : (
+                    columnHeaders.bathroom
+                  )}
+                </th>
+              )}
+              {hasShowers && (
+                <th className="text-left py-2 px-2 border-b">
+                  {isEditable ? (
+                    <EditableText
+                      value={columnHeaders.shower}
+                      onChange={(value) => handleColumnHeaderChange("shower", value)}
+                      placeholder="Shower"
+                    />
+                  ) : (
+                    columnHeaders.shower
+                  )}
+                </th>
+              )}
+              {hasToilets && (
+                <th className="text-left py-2 px-2 border-b">
+                  {isEditable ? (
+                    <EditableText
+                      value={columnHeaders.toilet}
+                      onChange={(value) => handleColumnHeaderChange("toilet", value)}
+                      placeholder="Toilet"
+                    />
+                  ) : (
+                    columnHeaders.toilet
+                  )}
+                </th>
+              )}
+              {hasNotes && (
+                <th className="text-left py-2 px-2 border-b">
+                  {isEditable ? (
+                    <EditableText
+                      value={columnHeaders.notes}
+                      onChange={(value) => handleColumnHeaderChange("notes", value)}
+                      placeholder="Notes"
+                    />
+                  ) : (
+                    columnHeaders.notes
+                  )}
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -304,24 +536,123 @@ export default function ReportDetailPage({ installationData, isPreview = true }:
               // Format the notes with proper sentence case
               notes = formatNote(notes)
 
+              // Use edited note if available
+              const finalNote = editedNotes[item.Unit] !== undefined ? editedNotes[item.Unit] : notes.trim()
+
               return (
                 <tr key={index}>
-                  <td className="py-2 px-2 border-b">{item.Unit}</td>
+                  <td className="py-2 px-2 border-b">
+                    {isEditable ? (
+                      <EditableText
+                        value={item.Unit}
+                        onChange={(value) => {
+                          // This would require updating the installation data
+                          // which is more complex and would need to be handled in a parent component
+                        }}
+                        placeholder="Unit"
+                      />
+                    ) : (
+                      item.Unit
+                    )}
+                  </td>
                   {hasKitchenAerators && (
                     <td className="py-2 px-2 border-b text-center">
-                      {kitchenAerator === "No Touch." ? "—" : kitchenAerator}
+                      {isEditable ? (
+                        <EditableText
+                          value={
+                            editedInstallations[item.Unit]?.kitchen !== undefined
+                              ? editedInstallations[item.Unit].kitchen
+                              : kitchenAerator === "No Touch."
+                                ? ""
+                                : kitchenAerator
+                          }
+                          onChange={(value) => handleInstallationEdit(item.Unit, "kitchen", value)}
+                          placeholder="Kitchen"
+                          className="text-center"
+                        />
+                      ) : kitchenAerator === "No Touch." ? (
+                        "—"
+                      ) : (
+                        kitchenAerator
+                      )}
                     </td>
                   )}
                   {hasBathroomAerators && (
                     <td className="py-2 px-2 border-b text-center">
-                      {bathroomAerator === "No Touch." ? "—" : bathroomAerator}
+                      {isEditable ? (
+                        <EditableText
+                          value={
+                            editedInstallations[item.Unit]?.bathroom !== undefined
+                              ? editedInstallations[item.Unit].bathroom
+                              : bathroomAerator === "No Touch."
+                                ? ""
+                                : bathroomAerator
+                          }
+                          onChange={(value) => handleInstallationEdit(item.Unit, "bathroom", value)}
+                          placeholder="Bathroom"
+                          className="text-center"
+                        />
+                      ) : bathroomAerator === "No Touch." ? (
+                        "—"
+                      ) : (
+                        bathroomAerator
+                      )}
                     </td>
                   )}
                   {hasShowers && (
-                    <td className="py-2 px-2 border-b text-center">{shower === "No Touch." ? "—" : shower}</td>
+                    <td className="py-2 px-2 border-b text-center">
+                      {isEditable ? (
+                        <EditableText
+                          value={
+                            editedInstallations[item.Unit]?.shower !== undefined
+                              ? editedInstallations[item.Unit].shower
+                              : shower === "No Touch."
+                                ? ""
+                                : shower
+                          }
+                          onChange={(value) => handleInstallationEdit(item.Unit, "shower", value)}
+                          placeholder="Shower"
+                          className="text-center"
+                        />
+                      ) : shower === "No Touch." ? (
+                        "—"
+                      ) : (
+                        shower
+                      )}
+                    </td>
                   )}
-                  {hasToilets && <td className="py-2 px-2 border-b text-center">{toilet || "—"}</td>}
-                  {hasNotes && <td className="py-2 px-2 border-b">{notes.trim()}</td>}
+                  {hasToilets && (
+                    <td className="py-2 px-2 border-b text-center">
+                      {isEditable ? (
+                        <EditableText
+                          value={
+                            editedInstallations[item.Unit]?.toilet !== undefined
+                              ? editedInstallations[item.Unit].toilet
+                              : toilet || ""
+                          }
+                          onChange={(value) => handleInstallationEdit(item.Unit, "toilet", value)}
+                          placeholder="Toilet"
+                          className="text-center"
+                        />
+                      ) : (
+                        toilet || "—"
+                      )}
+                    </td>
+                  )}
+                  {hasNotes && (
+                    <td className="py-2 px-2 border-b">
+                      {isEditable ? (
+                        <EditableText
+                          value={finalNote}
+                          onChange={(value) => handleNoteEdit(item.Unit, value)}
+                          placeholder="Notes"
+                          multiline={true}
+                        />
+                      ) : (
+                        finalNote
+                      )}
+                    </td>
+                  )}
                 </tr>
               )
             })}
@@ -356,17 +687,17 @@ export default function ReportDetailPage({ installationData, isPreview = true }:
 
           {/* Detail content */}
           <div className="mb-16">
-            <h2 className="text-xl font-bold mb-6">Detailed Unit Information</h2>
+            <h2 className="text-xl font-bold mb-6">{detailsTitle}</h2>
 
             <table className="w-full text-sm">
               <thead>
                 <tr>
-                  <th className="text-left py-2 px-2 border-b">Unit</th>
-                  {hasKitchenAerators && <th className="text-left py-2 px-2 border-b">Kitchen</th>}
-                  {hasBathroomAerators && <th className="text-left py-2 px-2 border-b">Bathroom</th>}
-                  {hasShowers && <th className="text-left py-2 px-2 border-b">Shower</th>}
-                  {hasToilets && <th className="text-left py-2 px-2 border-b">Toilet</th>}
-                  {hasNotes && <th className="text-left py-2 px-2 border-b">Notes</th>}
+                  <th className="text-left py-2 px-2 border-b">{columnHeaders.unit}</th>
+                  {hasKitchenAerators && <th className="text-left py-2 px-2 border-b">{columnHeaders.kitchen}</th>}
+                  {hasBathroomAerators && <th className="text-left py-2 px-2 border-b">{columnHeaders.bathroom}</th>}
+                  {hasShowers && <th className="text-left py-2 px-2 border-b">{columnHeaders.shower}</th>}
+                  {hasToilets && <th className="text-left py-2 px-2 border-b">{columnHeaders.toilet}</th>}
+                  {hasNotes && <th className="text-left py-2 px-2 border-b">{columnHeaders.notes}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -421,6 +752,9 @@ export default function ReportDetailPage({ installationData, isPreview = true }:
                   // Format the notes with proper sentence case
                   notes = formatNote(notes)
 
+                  // Use edited note if available
+                  const finalNote = editedNotes[item.Unit] !== undefined ? editedNotes[item.Unit] : notes.trim()
+
                   return (
                     <tr key={index}>
                       <td className="py-2 px-2 border-b">{item.Unit}</td>
@@ -438,7 +772,7 @@ export default function ReportDetailPage({ installationData, isPreview = true }:
                         <td className="py-2 px-2 border-b text-center">{shower === "No Touch." ? "—" : shower}</td>
                       )}
                       {hasToilets && <td className="py-2 px-2 border-b text-center">{toilet || "—"}</td>}
-                      {hasNotes && <td className="py-2 px-2 border-b">{notes.trim()}</td>}
+                      {hasNotes && <td className="py-2 px-2 border-b">{finalNote}</td>}
                     </tr>
                   )
                 })}

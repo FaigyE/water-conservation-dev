@@ -1,3 +1,9 @@
+"use client"
+
+import { useReportContext } from "@/lib/report-context"
+import EditableText from "@/components/editable-text"
+import { useEffect, useState } from "react"
+
 interface Note {
   unit: string
   note: string
@@ -6,11 +12,34 @@ interface Note {
 interface ReportNotesPageProps {
   notes: Note[]
   isPreview?: boolean
+  isEditable?: boolean
 }
 
-export default function ReportNotesPage({ notes, isPreview = true }: ReportNotesPageProps) {
+export default function ReportNotesPage({ notes, isPreview = true, isEditable = true }: ReportNotesPageProps) {
+  const { setNotes, setHasUnsavedChanges, sectionTitles, setSectionTitles } = useReportContext()
+  // Add state to track edited notes
+  const [editedNotes, setEditedNotes] = useState<Note[]>([])
+
+  // Initialize editedNotes with the provided notes on mount and when notes change
+  useEffect(() => {
+    // Try to load notes from localStorage first
+    const storedNotes = localStorage.getItem("reportNotes")
+    if (storedNotes) {
+      try {
+        const parsedNotes = JSON.parse(storedNotes)
+        setEditedNotes(parsedNotes)
+        console.log("Loaded notes from localStorage:", parsedNotes)
+      } catch (error) {
+        console.error("Error parsing stored notes:", error)
+        setEditedNotes([...notes]) // Fallback to props
+      }
+    } else {
+      setEditedNotes([...notes]) // Use props if nothing in localStorage
+    }
+  }, [notes])
+
   // Filter out notes without valid unit numbers
-  const filteredNotes = notes.filter((note) => {
+  const filteredNotes = editedNotes.filter((note) => {
     if (!note.unit || note.unit.trim() === "") return false
 
     const lowerUnit = note.unit.toLowerCase()
@@ -28,6 +57,47 @@ export default function ReportNotesPage({ notes, isPreview = true }: ReportNotes
     notePages.push(filteredNotes.slice(i, i + notesPerPage))
   }
 
+  const handleNoteChange = (index: number, field: keyof Note, value: string) => {
+    if (isEditable) {
+      // Create a deep copy of the edited notes array
+      const updatedNotes = JSON.parse(JSON.stringify(editedNotes))
+      updatedNotes[index] = { ...updatedNotes[index], [field]: value }
+
+      console.log(`Updating note ${index}, field ${field} to "${value}"`, updatedNotes[index])
+
+      // Update the local state
+      setEditedNotes(updatedNotes)
+
+      // Update the context
+      setNotes(updatedNotes)
+
+      // Save to localStorage immediately
+      localStorage.setItem("reportNotes", JSON.stringify(updatedNotes))
+
+      // Mark as having unsaved changes
+      setHasUnsavedChanges(true)
+    }
+  }
+
+  // Handle section title change
+  const handleSectionTitleChange = (value: string) => {
+    if (isEditable) {
+      setSectionTitles((prev) => {
+        const updated = { ...prev, notes: value }
+        console.log(`Updated notes section title to "${value}"`, updated)
+
+        // Save to localStorage immediately
+        localStorage.setItem("sectionTitles", JSON.stringify(updated))
+
+        return updated
+      })
+      setHasUnsavedChanges(true)
+    }
+  }
+
+  // Get the section title from context or use default
+  const notesTitle = sectionTitles.notes || "Notes"
+
   return isPreview ? (
     // Preview mode - show all notes in one continuous list
     <div className="report-page min-h-[1056px] relative">
@@ -43,7 +113,18 @@ export default function ReportNotesPage({ notes, isPreview = true }: ReportNotes
 
       {/* Notes content */}
       <div className="mb-16">
-        <h2 className="text-xl font-bold mb-6">Notes</h2>
+        <h2 className="text-xl font-bold mb-6">
+          {isEditable ? (
+            <EditableText
+              value={notesTitle}
+              onChange={handleSectionTitleChange}
+              placeholder="Section Title"
+              className="text-xl font-bold"
+            />
+          ) : (
+            notesTitle
+          )}
+        </h2>
 
         <table className="w-full">
           <thead>
@@ -55,8 +136,29 @@ export default function ReportNotesPage({ notes, isPreview = true }: ReportNotes
           <tbody>
             {filteredNotes.map((note, index) => (
               <tr key={index}>
-                <td className="py-2 px-4 border-b">{note.unit}</td>
-                <td className="py-2 px-4 border-b">{note.note}</td>
+                <td className="py-2 px-4 border-b">
+                  {isEditable ? (
+                    <EditableText
+                      value={note.unit}
+                      onChange={(value) => handleNoteChange(index, "unit", value)}
+                      placeholder="Unit"
+                    />
+                  ) : (
+                    note.unit
+                  )}
+                </td>
+                <td className="py-2 px-4 border-b">
+                  {isEditable ? (
+                    <EditableText
+                      value={note.note}
+                      onChange={(value) => handleNoteChange(index, "note", value)}
+                      placeholder="Note"
+                      multiline={true}
+                    />
+                  ) : (
+                    note.note
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -90,7 +192,7 @@ export default function ReportNotesPage({ notes, isPreview = true }: ReportNotes
 
           {/* Notes content */}
           <div className="mb-16">
-            <h2 className="text-xl font-bold mb-6">Notes</h2>
+            <h2 className="text-xl font-bold mb-6">{notesTitle}</h2>
 
             <table className="w-full">
               <thead>
@@ -100,12 +202,38 @@ export default function ReportNotesPage({ notes, isPreview = true }: ReportNotes
                 </tr>
               </thead>
               <tbody>
-                {pageNotes.map((note, index) => (
-                  <tr key={index}>
-                    <td className="py-2 px-4 border-b">{note.unit}</td>
-                    <td className="py-2 px-4 border-b">{note.note}</td>
-                  </tr>
-                ))}
+                {pageNotes.map((note, index) => {
+                  // Calculate the actual index in the full notes array
+                  const actualIndex = pageIndex * notesPerPage + index
+
+                  return (
+                    <tr key={index}>
+                      <td className="py-2 px-4 border-b">
+                        {isEditable ? (
+                          <EditableText
+                            value={note.unit}
+                            onChange={(value) => handleNoteChange(actualIndex, "unit", value)}
+                            placeholder="Unit"
+                          />
+                        ) : (
+                          note.unit
+                        )}
+                      </td>
+                      <td className="py-2 px-4 border-b">
+                        {isEditable ? (
+                          <EditableText
+                            value={note.note}
+                            onChange={(value) => handleNoteChange(actualIndex, "note", value)}
+                            placeholder="Note"
+                            multiline={true}
+                          />
+                        ) : (
+                          note.note
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

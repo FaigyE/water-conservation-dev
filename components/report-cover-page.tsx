@@ -1,10 +1,28 @@
+"use client"
+
+import { useReportContext } from "@/lib/report-context"
+import EditableText from "@/components/editable-text"
 import type { CustomerInfo } from "@/lib/types"
 
 interface ReportCoverPageProps {
   customerInfo: CustomerInfo
+  isEditable?: boolean
 }
 
-export default function ReportCoverPage({ customerInfo }: ReportCoverPageProps) {
+export default function ReportCoverPage({ customerInfo, isEditable = true }: ReportCoverPageProps) {
+  const { reportTitle, setReportTitle, setCustomerInfo, setHasUnsavedChanges } = useReportContext()
+
+  const handleCustomerInfoChange = (field: keyof CustomerInfo, value: string) => {
+    if (isEditable) {
+      setCustomerInfo((prev) => {
+        const updated = { ...prev, [field]: value }
+        console.log(`Updated ${field} to "${value}"`, updated)
+        return updated
+      })
+      setHasUnsavedChanges(true)
+    }
+  }
+
   return (
     <div className="report-page min-h-[1056px] relative">
       {/* Header with logo - made bigger and higher up */}
@@ -21,17 +39,97 @@ export default function ReportCoverPage({ customerInfo }: ReportCoverPageProps) 
       <div className="flex flex-col items-center justify-center h-[800px]">
         <div className="text-center mb-16">
           <p className="text-lg mb-4">ATTN:</p>
-          <p className="text-xl font-bold mb-1">{customerInfo.customerName}</p>
-          <p className="text-xl font-bold mb-1">{customerInfo.propertyName}</p>
-          <p className="text-xl font-bold mb-1">
-            {customerInfo.address} {customerInfo.city}, {customerInfo.state} {customerInfo.zip}
-          </p>
+          {isEditable ? (
+            <>
+              <p className="text-xl font-bold mb-1">
+                <EditableText
+                  value={customerInfo.customerName}
+                  onChange={(value) => handleCustomerInfoChange("customerName", value)}
+                  placeholder="Customer Name"
+                />
+              </p>
+              <p className="text-xl font-bold mb-1">
+                <EditableText
+                  value={customerInfo.propertyName}
+                  onChange={(value) => handleCustomerInfoChange("propertyName", value)}
+                  placeholder="Property Name"
+                />
+              </p>
+              <p className="text-xl font-bold mb-1">
+                <EditableText
+                  value={`${customerInfo.address} ${customerInfo.city}, ${customerInfo.state} ${customerInfo.zip}`}
+                  onChange={(value) => {
+                    // This is a simplified approach - in a real app, you might want to parse the address
+                    const parts = value.split(",")
+                    if (parts.length >= 2) {
+                      const addressPart = parts[0].trim()
+                      const locationPart = parts[1].trim().split(" ")
+                      const zip = locationPart.pop() || ""
+                      const state = locationPart.pop() || ""
+                      const city = locationPart.join(" ")
+
+                      handleCustomerInfoChange("address", addressPart)
+                      handleCustomerInfoChange("city", city)
+                      handleCustomerInfoChange("state", state)
+                      handleCustomerInfoChange("zip", zip)
+                    }
+                  }}
+                  placeholder="Address, City, State ZIP"
+                />
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-xl font-bold mb-1">{customerInfo.customerName}</p>
+              <p className="text-xl font-bold mb-1">{customerInfo.propertyName}</p>
+              <p className="text-xl font-bold mb-1">
+                {customerInfo.address} {customerInfo.city}, {customerInfo.state} {customerInfo.zip}
+              </p>
+            </>
+          )}
         </div>
 
-        <h1 className="text-3xl font-bold mb-8">Water Conservation Installation Report</h1>
+        <h1 className="text-3xl font-bold mb-8">
+          {isEditable ? (
+            <EditableText
+              value={reportTitle}
+              onChange={(value) => {
+                setReportTitle(value)
+                setHasUnsavedChanges(true)
+              }}
+              className="text-3xl font-bold text-center"
+              placeholder="Report Title"
+            />
+          ) : (
+            reportTitle
+          )}
+        </h1>
 
         <p className="text-xl font-bold">
-          {customerInfo.address} {customerInfo.city}, {customerInfo.state} {customerInfo.zip}
+          {isEditable ? (
+            <EditableText
+              value={`${customerInfo.address} ${customerInfo.city}, ${customerInfo.state} ${customerInfo.zip}`}
+              onChange={(value) => {
+                // This is a simplified approach - in a real app, you might want to parse the address
+                const parts = value.split(",")
+                if (parts.length >= 2) {
+                  const addressPart = parts[0].trim()
+                  const locationPart = parts[1].trim().split(" ")
+                  const zip = locationPart.pop() || ""
+                  const state = locationPart.pop() || ""
+                  const city = locationPart.join(" ")
+
+                  handleCustomerInfoChange("address", addressPart)
+                  handleCustomerInfoChange("city", city)
+                  handleCustomerInfoChange("state", state)
+                  handleCustomerInfoChange("zip", zip)
+                }
+              }}
+              placeholder="Address, City, State ZIP"
+            />
+          ) : (
+            `${customerInfo.address} ${customerInfo.city}, ${customerInfo.state} ${customerInfo.zip}`
+          )}
         </p>
       </div>
 

@@ -1,11 +1,56 @@
+"use client"
+
+import { useReportContext } from "@/lib/report-context"
+import EditableText from "@/components/editable-text"
 import type { CustomerInfo } from "@/lib/types"
 
 interface ReportLetterPageProps {
   customerInfo: CustomerInfo
   toiletCount: number
+  isEditable?: boolean
 }
 
-export default function ReportLetterPage({ customerInfo, toiletCount }: ReportLetterPageProps) {
+export default function ReportLetterPage({ customerInfo, toiletCount, isEditable = true }: ReportLetterPageProps) {
+  const {
+    letterText,
+    setLetterText,
+    signatureName,
+    setSignatureName,
+    signatureTitle,
+    setSignatureTitle,
+    setCustomerInfo,
+    setHasUnsavedChanges,
+    // Add new editable text elements
+    rePrefix,
+    setRePrefix,
+    dearPrefix,
+    setDearPrefix,
+  } = useReportContext()
+
+  const handleLetterTextChange = (index: number, value: string) => {
+    if (isEditable) {
+      const newLetterText = [...letterText]
+      newLetterText[index] = value
+      setLetterText(newLetterText)
+      setHasUnsavedChanges(true)
+      console.log(`Updated letter text at index ${index} to "${value}"`)
+    }
+  }
+
+  const handleCustomerInfoChange = (field: keyof CustomerInfo, value: string) => {
+    if (isEditable) {
+      setCustomerInfo((prev) => {
+        const updated = { ...prev, [field]: value }
+        console.log(`Updated ${field} to "${value}"`, updated)
+        return updated
+      })
+      setHasUnsavedChanges(true)
+    }
+  }
+
+  // Replace {toiletCount} placeholder with actual count
+  const processedLetterText = letterText.map((text) => text.replace("{toiletCount}", toiletCount.toString()))
+
   return (
     <div className="report-page min-h-[1056px] relative">
       {/* Header with logo - made bigger and higher up */}
@@ -20,32 +65,132 @@ export default function ReportLetterPage({ customerInfo, toiletCount }: ReportLe
 
       {/* Letter content */}
       <div className="mb-16">
-        <p className="mb-4">{customerInfo.date}</p>
-        <p className="mb-1">{customerInfo.propertyName}</p>
-        <p className="mb-1">{customerInfo.customerName}</p>
-        <p className="mb-1">RE: {customerInfo.address}</p>
-        <p className="mb-8">
-          {customerInfo.city}, {customerInfo.state} {customerInfo.zip}
-        </p>
-
-        <p className="mb-2">Dear {customerInfo.customerName.split(" ")[0]},</p>
-
         <p className="mb-4">
-          Please find the attached Installation Report. As you can see, we clearly indicated the installed items in each
-          area. You will see the repairs that we made noted as well.
+          {isEditable ? (
+            <EditableText
+              value={customerInfo.date}
+              onChange={(value) => handleCustomerInfoChange("date", value)}
+              placeholder="Date"
+            />
+          ) : (
+            customerInfo.date
+          )}
         </p>
-
-        <p className="mb-4">We successfully installed {toiletCount} toilets at the property.</p>
-
+        <p className="mb-1">
+          {isEditable ? (
+            <EditableText
+              value={customerInfo.propertyName}
+              onChange={(value) => handleCustomerInfoChange("propertyName", value)}
+              placeholder="Property Name"
+            />
+          ) : (
+            customerInfo.propertyName
+          )}
+        </p>
+        <p className="mb-1">
+          {isEditable ? (
+            <EditableText
+              value={customerInfo.customerName}
+              onChange={(value) => handleCustomerInfoChange("customerName", value)}
+              placeholder="Customer Name"
+            />
+          ) : (
+            customerInfo.customerName
+          )}
+        </p>
+        <p className="mb-1">
+          {isEditable ? (
+            <span className="flex">
+              <EditableText
+                value={rePrefix}
+                onChange={(value) => {
+                  setRePrefix(value)
+                  setHasUnsavedChanges(true)
+                }}
+                placeholder="RE:"
+                className="mr-1"
+              />
+              <EditableText
+                value={customerInfo.address}
+                onChange={(value) => handleCustomerInfoChange("address", value)}
+                placeholder="Address"
+              />
+            </span>
+          ) : (
+            <>
+              {rePrefix} {customerInfo.address}
+            </>
+          )}
+        </p>
         <p className="mb-8">
-          Please send us copies of the actual water bills following our installation, so we can analyze them to pinpoint
-          the anticipated water reduction and savings. We urge you to fix any constant water issues ASAP, as not to
-          compromise potential savings as a result of our installation.
+          {isEditable ? (
+            <EditableText
+              value={`${customerInfo.city}, ${customerInfo.state} ${customerInfo.zip}`}
+              onChange={(value) => {
+                // This is a simplified approach - in a real app, you might want to parse the address
+                const parts = value.split(",")
+                if (parts.length >= 2) {
+                  const locationPart = parts[1].trim().split(" ")
+                  const zip = locationPart.pop() || ""
+                  const state = locationPart.pop() || ""
+                  const city = locationPart.join(" ")
+
+                  handleCustomerInfoChange("city", city)
+                  handleCustomerInfoChange("state", state)
+                  handleCustomerInfoChange("zip", zip)
+                }
+              }}
+              placeholder="City, State ZIP"
+            />
+          ) : (
+            `${customerInfo.city}, ${customerInfo.state} ${customerInfo.zip}`
+          )}
         </p>
 
-        <p className="mb-4">
-          Thank you for choosing Green Light Water Conservation. We look forward to working with you in the near future.
+        <p className="mb-2">
+          {isEditable ? (
+            <span className="flex">
+              <EditableText
+                value={dearPrefix}
+                onChange={(value) => {
+                  setDearPrefix(value)
+                  setHasUnsavedChanges(true)
+                }}
+                placeholder="Dear"
+                className="mr-1"
+              />
+              <EditableText
+                value={customerInfo.customerName.split(" ")[0]}
+                onChange={(value) => {
+                  const nameParts = customerInfo.customerName.split(" ")
+                  nameParts[0] = value
+                  handleCustomerInfoChange("customerName", nameParts.join(" "))
+                }}
+                placeholder="First Name"
+              />
+              <span>,</span>
+            </span>
+          ) : (
+            <>
+              {dearPrefix} {customerInfo.customerName.split(" ")[0]},
+            </>
+          )}
         </p>
+
+        {processedLetterText.map((paragraph, index) => (
+          <p key={index} className="mb-4">
+            {isEditable ? (
+              <EditableText
+                value={letterText[index]} // Use the original text with placeholders for editing
+                onChange={(value) => handleLetterTextChange(index, value)}
+                multiline={true}
+                placeholder={`Paragraph ${index + 1}`}
+              />
+            ) : (
+              paragraph // Use the processed text for display
+            )}
+          </p>
+        ))}
 
         <p className="mb-1">Very truly yours,</p>
 
@@ -59,8 +204,34 @@ export default function ReportLetterPage({ customerInfo, toiletCount }: ReportLe
           />
         </div>
 
-        <p className="mb-1">Zev Stern, CWEP</p>
-        <p>Chief Operating Officer</p>
+        <p className="mb-1">
+          {isEditable ? (
+            <EditableText
+              value={signatureName}
+              onChange={(value) => {
+                setSignatureName(value)
+                setHasUnsavedChanges(true)
+              }}
+              placeholder="Signature Name"
+            />
+          ) : (
+            signatureName
+          )}
+        </p>
+        <p>
+          {isEditable ? (
+            <EditableText
+              value={signatureTitle}
+              onChange={(value) => {
+                setSignatureTitle(value)
+                setHasUnsavedChanges(true)
+              }}
+              placeholder="Signature Title"
+            />
+          ) : (
+            signatureTitle
+          )}
+        </p>
       </div>
 
       {/* Footer - full width */}

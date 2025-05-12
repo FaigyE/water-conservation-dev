@@ -4,8 +4,9 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { FileDown } from "lucide-react"
 import type { CustomerInfo, InstallationData, Note } from "@/lib/types"
+import { useReportContext } from "@/lib/report-context"
 // Import the formatNote function
-import { getAeratorDescription } from "@/lib/utils/aerator-helpers"
+import { getAeratorDescription, formatNote } from "@/lib/utils/aerator-helpers"
 
 interface EnhancedPdfButtonProps {
   customerInfo: CustomerInfo
@@ -28,6 +29,66 @@ export default function EnhancedPdfButton({
   const [footerImage, setFooterImage] = useState<{ dataUrl: string; width: number; height: number } | null>(null)
   const [signatureLoaded, setSignatureLoaded] = useState(false)
   const [signatureImage, setSignatureImage] = useState<string | null>(null)
+  const [editedDetailNotes, setEditedDetailNotes] = useState<Record<string, string>>({})
+  // Add state to track edited installations
+  // Add after the editedDetailNotes state declaration
+  const [editedInstallations, setEditedInstallations] = useState<Record<string, Record<string, string>>>({})
+  // Add state for column headers
+  const [columnHeaders, setColumnHeaders] = useState({
+    unit: "Unit",
+    kitchen: "Kitchen",
+    bathroom: "Bathroom",
+    shower: "Shower",
+    toilet: "Toilet",
+    notes: "Notes",
+  })
+
+  // Get the latest state from context
+  const { reportTitle, letterText, signatureName, signatureTitle, rePrefix, dearPrefix, sectionTitles } =
+    useReportContext()
+
+  // Load edited notes from localStorage
+  useEffect(() => {
+    const storedNotes = localStorage.getItem("detailNotes")
+    if (storedNotes) {
+      try {
+        const parsedNotes = JSON.parse(storedNotes)
+        setEditedDetailNotes(parsedNotes)
+        console.log("PDF: Loaded edited detail notes from localStorage:", parsedNotes)
+      } catch (error) {
+        console.error("PDF: Error parsing stored detail notes:", error)
+      }
+    }
+  }, [])
+
+  // Load edited installations from localStorage
+  // Add after the useEffect for loading edited notes
+  useEffect(() => {
+    const storedInstallations = localStorage.getItem("detailInstallations")
+    if (storedInstallations) {
+      try {
+        const parsedInstallations = JSON.parse(storedInstallations)
+        setEditedInstallations(parsedInstallations)
+        console.log("PDF: Loaded edited installations from localStorage:", parsedInstallations)
+      } catch (error) {
+        console.error("PDF: Error parsing stored installations:", error)
+      }
+    }
+  }, [])
+
+  // Load column headers from localStorage
+  useEffect(() => {
+    const storedHeaders = localStorage.getItem("columnHeaders")
+    if (storedHeaders) {
+      try {
+        const parsedHeaders = JSON.parse(storedHeaders)
+        setColumnHeaders(parsedHeaders)
+        console.log("PDF: Loaded column headers from localStorage:", parsedHeaders)
+      } catch (error) {
+        console.error("PDF: Error parsing stored column headers:", error)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     // Load jsPDF dynamically
@@ -225,6 +286,71 @@ export default function EnhancedPdfButton({
     try {
       setIsGenerating(true)
       console.log("Starting enhanced PDF generation...")
+      console.log("Using context values:", {
+        reportTitle,
+        letterText,
+        signatureName,
+        signatureTitle,
+        rePrefix,
+        dearPrefix,
+        sectionTitles,
+      })
+
+      // Load the latest edited notes from localStorage right before generating the PDF
+      let latestEditedNotes: Record<string, string> = {}
+      try {
+        const storedNotes = localStorage.getItem("detailNotes")
+        if (storedNotes) {
+          latestEditedNotes = JSON.parse(storedNotes)
+          console.log("PDF: Loaded latest edited detail notes from localStorage:", latestEditedNotes)
+        }
+      } catch (error) {
+        console.error("PDF: Error parsing stored detail notes:", error)
+      }
+
+      // Update the handleGeneratePdf function to load the latest edited installations
+      // Add after loading the latest edited notes
+      // Load the latest edited installations from localStorage right before generating the PDF
+      let latestEditedInstallations: Record<string, Record<string, string>> = {}
+      try {
+        const storedInstallations = localStorage.getItem("detailInstallations")
+        if (storedInstallations) {
+          latestEditedInstallations = JSON.parse(storedInstallations)
+          console.log("PDF: Loaded latest edited installations from localStorage:", latestEditedInstallations)
+        }
+      } catch (error) {
+        console.error("PDF: Error parsing stored installations:", error)
+      }
+
+      // Load the latest column headers from localStorage
+      let latestColumnHeaders = { ...columnHeaders }
+      try {
+        const storedHeaders = localStorage.getItem("columnHeaders")
+        if (storedHeaders) {
+          latestColumnHeaders = JSON.parse(storedHeaders)
+          console.log("PDF: Loaded latest column headers from localStorage:", latestColumnHeaders)
+        }
+      } catch (error) {
+        console.error("PDF: Error parsing stored column headers:", error)
+      }
+
+      console.log("Using edited installations:", latestEditedInstallations)
+      console.log("Using column headers:", latestColumnHeaders)
+
+      // Load the latest edited report notes from localStorage
+      let latestReportNotes: Note[] = [...notes]
+      try {
+        const storedReportNotes = localStorage.getItem("reportNotes")
+        if (storedReportNotes) {
+          latestReportNotes = JSON.parse(storedReportNotes)
+          console.log("PDF: Loaded latest report notes from localStorage:", latestReportNotes)
+        }
+      } catch (error) {
+        console.error("PDF: Error parsing stored report notes:", error)
+      }
+
+      console.log("Using edited detail notes:", latestEditedNotes)
+      console.log("Using report notes:", latestReportNotes)
 
       // Create a new jsPDF instance
       const { jsPDF } = window.jspdf
@@ -300,7 +426,7 @@ export default function EnhancedPdfButton({
       let totalPages = 2 // Cover page + letter page
 
       // Estimate notes pages
-      const filteredNotes = notes.filter((note) => {
+      const filteredNotes = latestReportNotes.filter((note) => {
         if (!note.unit || note.unit.trim() === "") return false
         const lowerUnit = note.unit.toLowerCase()
         const invalidValues = ["total", "sum", "average", "avg", "count", "header", "n/a", "na"]
@@ -322,8 +448,7 @@ export default function EnhancedPdfButton({
       addHeaderFooter(1, totalPages)
 
       doc.setFontSize(24)
-      doc.text("Water Conservation", 105, 80, { align: "center" })
-      doc.text("Installation Report", 105, 90, { align: "center" })
+      doc.text(reportTitle, 105, 80, { align: "center" })
 
       doc.setFontSize(14)
       doc.text("ATTN:", 105, 120, { align: "center" })
@@ -346,22 +471,18 @@ export default function EnhancedPdfButton({
       yPos += 7
       doc.text(customerInfo.customerName, 15, yPos)
       yPos += 7
-      doc.text(`RE: ${customerInfo.address}`, 15, yPos)
+      doc.text(`${rePrefix} ${customerInfo.address}`, 15, yPos)
       yPos += 7
       doc.text(`${customerInfo.city}, ${customerInfo.state} ${customerInfo.zip}`, 15, yPos)
       yPos += 20
 
-      doc.text(`Dear ${customerInfo.customerName.split(" ")[0]},`, 15, yPos)
+      doc.text(`${dearPrefix} ${customerInfo.customerName.split(" ")[0]},`, 15, yPos)
       yPos += 10
 
-      const letterText = [
-        "Please find the attached Installation Report. As you can see, we clearly indicated the installed items in each area. You will see the repairs that we made noted as well.",
-        `We successfully installed ${toiletCount} toilets at the property.`,
-        "Please send us copies of the actual water bills following our installation, so we can analyze them to pinpoint the anticipated water reduction and savings. We urge you to fix any constant water issues ASAP, as not to compromise potential savings as a result of our installation.",
-        "Thank you for choosing Green Light Water Conservation. We look forward to working with you in the near future.",
-      ]
+      // Process letter text to replace placeholders
+      const processedLetterText = letterText.map((text) => text.replace("{toiletCount}", toiletCount.toString()))
 
-      letterText.forEach((paragraph) => {
+      processedLetterText.forEach((paragraph) => {
         const lines = doc.splitTextToSize(paragraph, 180)
         lines.forEach((line) => {
           doc.text(line, 15, yPos)
@@ -383,9 +504,9 @@ export default function EnhancedPdfButton({
         yPos += 5 // Reduced from 10
       }
 
-      doc.text("Zev Stern, CWEP", 15, yPos)
+      doc.text(signatureName, 15, yPos)
       yPos += 7
-      doc.text("Chief Operating Officer", 15, yPos)
+      doc.text(signatureTitle, 15, yPos)
 
       // Notes Pages
       if (filteredNotes.length > 0) {
@@ -398,7 +519,8 @@ export default function EnhancedPdfButton({
           currentPage++
 
           doc.setFontSize(18)
-          doc.text("Notes", 105, contentStartY, { align: "center" })
+          // Use section title from context
+          doc.text(sectionTitles.notes || "Notes", 105, contentStartY, { align: "center" })
 
           doc.setFontSize(12)
 
@@ -408,8 +530,8 @@ export default function EnhancedPdfButton({
           doc.rect(15, yPos - 5, 180, 10, "F")
           doc.setFont("helvetica", "bold")
           doc.setFontSize(10) // Set consistent font size for notes
-          doc.text("Unit", 20, yPos) // Changed from "Apt" to "Unit"
-          doc.text("Notes", 50, yPos)
+          doc.text(latestColumnHeaders.unit, 20, yPos) // Use edited column header
+          doc.text(latestColumnHeaders.notes, 50, yPos) // Use edited column header
           doc.setFont("helvetica", "normal")
           yPos += 10
 
@@ -598,7 +720,8 @@ export default function EnhancedPdfButton({
         currentPage++
 
         doc.setFontSize(18)
-        doc.text("Detailed Unit Information", 105, contentStartY, { align: "center" })
+        // Use section title from context
+        doc.text(sectionTitles.detailsTitle || "Detailed Unit Information", 105, contentStartY, { align: "center" })
 
         // Create table header - add more space after the title
         yPos = contentStartY + 10 // Add 10mm after the title
@@ -608,23 +731,23 @@ export default function EnhancedPdfButton({
         doc.setFontSize(9)
 
         let colIndex = 0
-        doc.text("Unit", columnPositions[colIndex++], yPos) // Changed from "Apt" to "Unit"
+        doc.text(latestColumnHeaders.unit, columnPositions[colIndex++], yPos)
 
         // Use shorter header text to avoid overlap
         if (hasKitchenAerators) {
-          doc.text("Kitchen", columnPositions[colIndex++], yPos)
+          doc.text(latestColumnHeaders.kitchen, columnPositions[colIndex++], yPos)
         }
         if (hasBathroomAerators) {
-          doc.text("Bathroom", columnPositions[colIndex++], yPos)
+          doc.text(latestColumnHeaders.bathroom, columnPositions[colIndex++], yPos)
         }
         if (hasShowers) {
-          doc.text("Shower", columnPositions[colIndex++], yPos)
+          doc.text(latestColumnHeaders.shower, columnPositions[colIndex++], yPos)
         }
         if (hasToilets) {
-          doc.text("Toilet", columnPositions[colIndex++], yPos)
+          doc.text(latestColumnHeaders.toilet, columnPositions[colIndex++], yPos)
         }
         if (hasNotes) {
-          doc.text("Notes", columnPositions[colIndex++], yPos)
+          doc.text(latestColumnHeaders.notes, columnPositions[colIndex++], yPos)
         }
 
         doc.setFont("helvetica", "normal")
@@ -645,20 +768,45 @@ export default function EnhancedPdfButton({
           const isSpecialUnit =
             item.Unit.toLowerCase().includes("shower") ||
             item.Unit.toLowerCase().includes("office") ||
+            item.Unit.toLowerCase().includes("laundry") ||
             item.Unit.toLowerCase().includes("laundry")
 
           // Get values for each cell using the found column names
-          const kitchenAerator =
-            isSpecialUnit || !kitchenAeratorColumn ? "" : getAeratorDescription(item[kitchenAeratorColumn], "kitchen")
+          // Update the PDF generation to use edited installation values
+          // In the section where you write data to PDF, update the kitchen, bathroom, shower, and toilet values
 
+          // Replace the kitchenAerator calculation with:
+          const kitchenAerator =
+            isSpecialUnit || !kitchenAeratorColumn
+              ? ""
+              : latestEditedInstallations[item.Unit]?.kitchen !== undefined
+                ? latestEditedInstallations[item.Unit].kitchen
+                : getAeratorDescription(item[kitchenAeratorColumn], "kitchen")
+
+          // Replace the bathroomAerator calculation with:
           const bathroomAerator = !bathroomAeratorColumn
             ? ""
-            : getAeratorDescription(item[bathroomAeratorColumn], "bathroom")
+            : latestEditedInstallations[item.Unit]?.bathroom !== undefined
+              ? latestEditedInstallations[item.Unit].bathroom
+              : getAeratorDescription(item[bathroomAeratorColumn], "bathroom")
 
-          const showerHead = !showerHeadColumn ? "" : getAeratorDescription(item[showerHeadColumn], "shower")
+          // Replace the showerHead calculation with:
+          const showerHead = !showerHeadColumn
+            ? ""
+            : latestEditedInstallations[item.Unit]?.shower !== undefined
+              ? latestEditedInstallations[item.Unit].shower
+              : getAeratorDescription(item[showerHeadColumn], "shower")
+
+          // Replace the toilet calculation with:
+          const toilet =
+            latestEditedInstallations[item.Unit]?.toilet !== undefined
+              ? latestEditedInstallations[item.Unit].toilet
+              : hasToiletInstalled(item)
+                ? "0.8 GPF"
+                : ""
 
           // Check both possible column names for toilet installation
-          const toilet = hasToiletInstalled(item) ? "0.8 GPF" : ""
+          // const toilet = hasToiletInstalled(item) ? "0.8 GPF" : ""
 
           // Update the notes compilation in the PDF generation
           // Compile notes with proper sentence case - only include leak issues
@@ -684,12 +832,18 @@ export default function EnhancedPdfButton({
             noteText = "Unit not accessed."
           }
 
+          // Format the notes with proper sentence case
+          noteText = formatNote(noteText)
+
+          // Use edited note if available from localStorage
+          const finalNoteText = latestEditedNotes[item.Unit] !== undefined ? latestEditedNotes[item.Unit] : noteText
+
           // Calculate how many lines the note will take
           let noteLines: string[] = []
-          if (hasNotes && noteText) {
+          if (hasNotes && finalNoteText) {
             // Calculate the maximum width for notes based on the column width
             const maxWidth = columnWidths[columnWidths.length - 1] - 5
-            noteLines = doc.splitTextToSize(noteText, maxWidth)
+            noteLines = doc.splitTextToSize(finalNoteText, maxWidth)
           }
 
           // Calculate the height this row will take
