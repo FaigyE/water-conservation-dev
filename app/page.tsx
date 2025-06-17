@@ -22,11 +22,166 @@ export default function Home() {
   const [zip, setZip] = useState("")
   const [loading, setLoading] = useState(false)
   const [unitType, setUnitType] = useState("Unit")
+  const [coverImage, setCoverImage] = useState<string | null>(null)
+  const [imageSize, setImageSize] = useState<number>(80)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setFile(e.target.files[0])
     }
+  }
+
+  // Helper function to find the unit column by looking for headers containing "unit"
+  const findUnitColumn = (row: any): { value: any; columnName: string } => {
+    // First, look for any column header that contains "unit" (case-insensitive)
+    for (const key of Object.keys(row)) {
+      if (key.toLowerCase().includes("unit")) {
+        console.log(`CSV: Found unit column by keyword: "${key}"`)
+        return { value: row[key], columnName: key }
+      }
+    }
+
+    // Then try other apartment-related keywords
+    const apartmentKeywords = ["apt", "apartment", "room"]
+    for (const key of Object.keys(row)) {
+      const keyLower = key.toLowerCase()
+      for (const keyword of apartmentKeywords) {
+        if (keyLower.includes(keyword)) {
+          console.log(`CSV: Found unit column by apartment keyword "${keyword}": "${key}"`)
+          return { value: row[key], columnName: key }
+        }
+      }
+    }
+
+    // If no suitable column found, use the first column as a fallback
+    const firstKey = Object.keys(row)[0]
+    console.log(`CSV: No unit column found, using first column as fallback: "${firstKey}"`)
+    return { value: row[firstKey], columnName: firstKey }
+  }
+
+  // Shared CSV processing function
+  const processCsvData = async (csvString: string): Promise<any[]> => {
+    return new Promise((resolve, reject) => {
+      Papa.parse(csvString, {
+        header: true,
+        skipEmptyLines: false, // Don't skip empty lines so we can detect them
+        complete: (results) => {
+          console.log("CSV parsing complete, raw data length:", results.data.length)
+
+          // Apply the same filtering logic
+          const filteredData = []
+
+          for (let i = 0; i < results.data.length; i++) {
+            const row: any = results.data[i]
+
+            // Use the improved unit column detection
+            const { value: unitValue, columnName: unitColumnName } = findUnitColumn(row)
+
+            // Log each row for debugging
+            console.log(
+              `CSV Row ${i + 1}: Unit column="${unitColumnName}", Unit value="${unitValue}" (type: ${typeof unitValue}, length: ${unitValue ? String(unitValue).length : "null"})`,
+            )
+
+            // Check if unit is truly empty - be very strict about this
+            if (
+              unitValue === undefined ||
+              unitValue === null ||
+              unitValue === "" ||
+              (typeof unitValue === "string" && unitValue.trim() === "") ||
+              String(unitValue).trim() === ""
+            ) {
+              console.log(
+                `CSV STOPPING: Found empty unit at row ${i + 1}. Unit value: "${unitValue}". Processed ${filteredData.length} valid rows.`,
+              )
+              break // Stop processing immediately when we find an empty unit
+            }
+
+            // Convert to string and trim for further checks
+            const trimmedUnit = String(unitValue).trim()
+
+            // If after trimming it's empty, stop
+            if (trimmedUnit === "") {
+              console.log(
+                `CSV STOPPING: Found empty unit after trimming at row ${i + 1}. Original: "${unitValue}". Processed ${filteredData.length} valid rows.`,
+              )
+              break
+            }
+
+            // Filter out rows with non-apartment values (often headers, totals, etc.) but continue processing
+            const lowerUnit = trimmedUnit.toLowerCase()
+            const invalidValues = [
+              "total",
+              "sum",
+              "average",
+              "avg",
+              "count",
+              "header",
+              "n/a",
+              "na",
+              "grand total",
+              "subtotal",
+              "summary",
+              "totals",
+              "grand",
+              "sub total",
+            ]
+
+            if (invalidValues.some((val) => lowerUnit.includes(val))) {
+              console.log(
+                `CSV: Skipping invalid unit "${trimmedUnit}" at row ${i + 1} (contains: ${invalidValues.find((val) => lowerUnit.includes(val))})`,
+              )
+              continue // Skip this row but continue processing
+            }
+
+            // Also check if this looks like a total row by examining all values in the row
+            const rowValues = Object.values(row).map((v) =>
+              String(v || "")
+                .toLowerCase()
+                .trim(),
+            )
+            const containsTotalKeyword = rowValues.some((v) => invalidValues.some((invalid) => v.includes(invalid)))
+
+            if (containsTotalKeyword) {
+              console.log(`CSV: Skipping total row "${trimmedUnit}" at row ${i + 1} (row contains total keywords)`)
+              console.log(`CSV: Row values:`, rowValues)
+              continue // Skip this row but continue processing
+            }
+
+            console.log(`CSV: Adding valid unit: "${trimmedUnit}"`)
+
+            // Create a normalized version of the row with a consistent "Unit" property
+            const normalizedRow = { ...row }
+            normalizedRow.Unit = unitValue // Ensure there's always a "Unit" property
+            normalizedRow._originalUnitColumn = unitColumnName // Store the original column name for reference
+
+            filteredData.push(normalizedRow)
+          }
+
+          console.log(`CSV: Final result: ${filteredData.length} valid units processed`)
+
+          // Sort the results
+          const sortedData = filteredData.sort((a, b) => {
+            const unitA = a.Unit
+            const unitB = b.Unit
+
+            // Try to parse as numbers first
+            const numA = Number.parseInt(unitA)
+            const numB = Number.parseInt(unitB)
+
+            // If both are valid numbers, sort numerically
+            if (!isNaN(numA) && !isNaN(numB)) {
+              return numA - numB
+            }
+
+            // Otherwise, sort alphabetically
+            return String(unitA).localeCompare(String(unitB), undefined, { numeric: true, sensitivity: "base" })
+          })
+
+          resolve(sortedData)
+        },
+        error: (error) => reject(error),
+      })
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -40,21 +195,22 @@ export default function Home() {
       const fileExtension = file.name.split(".").pop()?.toLowerCase()
       let parsedData: any[] = []
 
+      console.log(`Processing ${fileExtension} file: ${file.name}`)
+
       if (fileExtension === "csv") {
-        // Parse CSV file
-        parsedData = await new Promise((resolve, reject) => {
-          Papa.parse(file, {
-            header: true,
-            complete: (results) => resolve(results.data),
-            error: (error) => reject(error),
-          })
-        })
+        // Parse CSV file directly
+        const csvText = await file.text()
+        parsedData = await processCsvData(csvText)
       } else if (fileExtension === "xlsx" || fileExtension === "xls") {
-        // Parse Excel file
+        // Parse Excel file - it will be converted to CSV internally and use the same processing logic
         parsedData = await parseExcelFile(file)
       } else {
         throw new Error("Unsupported file format. Please upload a CSV or Excel file.")
       }
+
+      console.log(`Final parsed data length: ${parsedData.length}`)
+      console.log("Sample of final data:", parsedData.slice(0, 3))
+      console.log("Last 3 rows of final data:", parsedData.slice(-3))
 
       // Store data in localStorage
       localStorage.setItem("installationData", JSON.stringify(parsedData))
@@ -71,6 +227,10 @@ export default function Home() {
           unitType,
         }),
       )
+
+      // Save coverImage and imageSize to localStorage
+      localStorage.setItem("coverImage", JSON.stringify(coverImage))
+      localStorage.setItem("coverImageSize", JSON.stringify(imageSize))
 
       // Navigate to report page
       router.push("/report")
@@ -176,7 +336,10 @@ export default function Home() {
             <div className="space-y-2">
               <h2 className="text-xl font-semibold">Installation Data</h2>
               <p className="text-sm text-muted-foreground">
-                Upload the CSV or Excel file containing installation data.
+                Upload the CSV or Excel file containing installation data. The system will automatically detect columns
+                containing "unit" (like "BLDG/Unit") for unit identification. Excel files will be converted to CSV
+                format internally for consistent processing. Processing will automatically stop at the first empty unit
+                cell and skip any total rows.
               </p>
               <Input id="csvFile" type="file" accept=".csv,.xlsx,.xls" onChange={handleFileChange} required />
             </div>

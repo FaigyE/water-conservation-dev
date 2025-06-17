@@ -49,7 +49,7 @@ export default function ReportLetterPage({ customerInfo, toiletCount, isEditable
   }
 
   // Replace {toiletCount} placeholder with actual count
-  const processedLetterText = letterText.map((text) => text.replace("{toiletCount}", toiletCount.toString()))
+  const processedLetterText = letterText.map((text) => text.replace(/\{toiletCount\}/g, toiletCount.toString()))
 
   return (
     <div className="report-page min-h-[1056px] relative">
@@ -177,20 +177,26 @@ export default function ReportLetterPage({ customerInfo, toiletCount, isEditable
           )}
         </p>
 
-        {processedLetterText.map((paragraph, index) => (
-          <p key={index} className="mb-4">
-            {isEditable ? (
-              <EditableText
-                value={letterText[index]} // Use the original text with placeholders for editing
-                onChange={(value) => handleLetterTextChange(index, value)}
-                multiline={true}
-                placeholder={`Paragraph ${index + 1}`}
-              />
-            ) : (
-              paragraph // Use the processed text for display
-            )}
-          </p>
-        ))}
+        {letterText.map((originalText, index) => {
+          // Process the text to replace placeholders for display
+          const displayText = originalText.replace(/\{toiletCount\}/g, toiletCount.toString())
+
+          return (
+            <p key={index} className="mb-4">
+              {isEditable ? (
+                <EditableText
+                  value={originalText} // Edit the original text with placeholders
+                  displayValue={displayText} // Show the processed text
+                  onChange={(value) => handleLetterTextChange(index, value)}
+                  multiline={true}
+                  placeholder={`Paragraph ${index + 1}`}
+                />
+              ) : (
+                displayText // Use the processed text for display
+              )}
+            </p>
+          )
+        })}
 
         <p className="mb-1">Very truly yours,</p>
 

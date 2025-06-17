@@ -195,18 +195,82 @@ function ReportContent() {
         const { count, totalCount } = getToiletInfo()
         setToiletCount(totalCount) // Use the total count from the column name
 
-        // Filter out rows without valid unit/apartment numbers
-        const filtered = parsedInstallationData.filter((item: InstallationData) => {
-          // Check if Unit exists and is not empty
-          if (!item.Unit || item.Unit.trim() === "") return false
+        // Filter out rows without valid unit/apartment numbers and stop at first empty unit
+        const filtered = (() => {
+          const result = []
 
-          // Filter out rows with non-apartment values (often headers, totals, etc.)
-          const lowerUnit = item.Unit.toLowerCase()
-          const invalidValues = ["total", "sum", "average", "avg", "count", "header", "n/a", "na"]
-          if (invalidValues.some((val) => lowerUnit.includes(val))) return false
+          console.log("Starting to process installation data...")
+          console.log("Total rows to process:", parsedInstallationData.length)
 
-          return true
-        })
+          for (let i = 0; i < parsedInstallationData.length; i++) {
+            const item = parsedInstallationData[i]
+
+            // Get the unit value - be very explicit about this
+            const unitValue = item.Unit
+
+            // Log each row for debugging
+            console.log(
+              `Row ${i + 1}: Unit="${unitValue}" (type: ${typeof unitValue}, length: ${unitValue ? unitValue.length : "null"})`,
+            )
+
+            // Check if unit is truly empty - be very strict about this
+            if (
+              unitValue === undefined ||
+              unitValue === null ||
+              unitValue === "" ||
+              (typeof unitValue === "string" && unitValue.trim() === "")
+            ) {
+              console.log(
+                `STOPPING: Found empty unit at row ${i + 1}. Unit value: "${unitValue}". Processed ${result.length} valid rows.`,
+              )
+              break // Stop processing immediately when we find an empty unit
+            }
+
+            // Convert to string and trim for further checks
+            const trimmedUnit = String(unitValue).trim()
+
+            // If after trimming it's empty, stop
+            if (trimmedUnit === "") {
+              console.log(
+                `STOPPING: Found empty unit after trimming at row ${i + 1}. Original: "${unitValue}". Processed ${result.length} valid rows.`,
+              )
+              break
+            }
+
+            // Filter out rows with non-apartment values (often headers, totals, etc.) but continue processing
+            const lowerUnit = trimmedUnit.toLowerCase()
+            const invalidValues = ["total", "sum", "average", "avg", "count", "header", "n/a", "na"]
+            if (invalidValues.some((val) => lowerUnit.includes(val))) {
+              console.log(
+                `Skipping invalid unit "${trimmedUnit}" at row ${i + 1} (contains: ${invalidValues.find((val) => lowerUnit.includes(val))})`,
+              )
+              continue // Skip this row but continue processing
+            }
+
+            console.log(`Adding valid unit: "${trimmedUnit}"`)
+            result.push(item)
+          }
+
+          console.log(`Final result: ${result.length} valid units processed`)
+
+          // Sort the results by unit number in ascending order
+          return result.sort((a, b) => {
+            const unitA = a.Unit
+            const unitB = b.Unit
+
+            // Try to parse as numbers first
+            const numA = Number.parseInt(unitA)
+            const numB = Number.parseInt(unitB)
+
+            // If both are valid numbers, sort numerically
+            if (!isNaN(numA) && !isNaN(numB)) {
+              return numA - numB
+            }
+
+            // Otherwise, sort alphabetically
+            return unitA.localeCompare(unitB, undefined, { numeric: true, sensitivity: "base" })
+          })
+        })()
 
         setFilteredData(filtered)
 

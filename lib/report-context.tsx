@@ -4,6 +4,7 @@ import type React from "react"
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import type { CustomerInfo, Note } from "@/lib/types"
 
+// Add coverImage to the ReportContextType interface
 interface ReportContextType {
   customerInfo: CustomerInfo
   setCustomerInfo: React.Dispatch<React.SetStateAction<CustomerInfo>>
@@ -22,13 +23,18 @@ interface ReportContextType {
   hasUnsavedChanges: boolean
   setHasUnsavedChanges: React.Dispatch<React.SetStateAction<boolean>>
   saveChanges: () => void
-  // Add new state for editable text elements
+  // Add new editable text elements
   rePrefix: string
   setRePrefix: React.Dispatch<React.SetStateAction<string>>
   dearPrefix: string
   setDearPrefix: React.Dispatch<React.SetStateAction<string>>
   sectionTitles: Record<string, string>
   setSectionTitles: React.Dispatch<React.SetStateAction<Record<string, string>>>
+  // Add cover image
+  coverImage: string | null
+  setCoverImage: React.Dispatch<React.SetStateAction<string | null>>
+  coverImageSize: number
+  setCoverImageSize: React.Dispatch<React.SetStateAction<number>>
 }
 
 const defaultCustomerInfo: CustomerInfo = {
@@ -56,6 +62,7 @@ const defaultSectionTitles = {
 
 const ReportContext = createContext<ReportContextType | undefined>(undefined)
 
+// Add coverImage state to the ReportProvider
 export function ReportProvider({ children }: { children: ReactNode }) {
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo>(defaultCustomerInfo)
   const [toiletCount, setToiletCount] = useState<number>(0)
@@ -71,6 +78,10 @@ export function ReportProvider({ children }: { children: ReactNode }) {
   const [dearPrefix, setDearPrefix] = useState<string>("Dear")
   const [sectionTitles, setSectionTitles] = useState<Record<string, string>>(defaultSectionTitles)
 
+  // Add cover image state
+  const [coverImage, setCoverImage] = useState<string | null>(null)
+  const [coverImageSize, setCoverImageSize] = useState<number>(80)
+
   // Load data from localStorage on initial render
   useEffect(() => {
     const storedCustomerInfo = localStorage.getItem("customerInfo")
@@ -84,6 +95,9 @@ export function ReportProvider({ children }: { children: ReactNode }) {
     const storedRePrefix = localStorage.getItem("rePrefix")
     const storedDearPrefix = localStorage.getItem("dearPrefix")
     const storedSectionTitles = localStorage.getItem("sectionTitles")
+    // Load cover image
+    const storedCoverImage = localStorage.getItem("coverImage")
+    const storedCoverImageSize = localStorage.getItem("coverImageSize")
 
     if (storedCustomerInfo) {
       setCustomerInfo(JSON.parse(storedCustomerInfo))
@@ -128,6 +142,15 @@ export function ReportProvider({ children }: { children: ReactNode }) {
     if (storedSectionTitles) {
       setSectionTitles(JSON.parse(storedSectionTitles))
     }
+
+    // Load cover image
+    if (storedCoverImage) {
+      setCoverImage(JSON.parse(storedCoverImage))
+    }
+
+    if (storedCoverImageSize) {
+      setCoverImageSize(JSON.parse(storedCoverImageSize))
+    }
   }, [])
 
   // Save changes to localStorage
@@ -143,6 +166,7 @@ export function ReportProvider({ children }: { children: ReactNode }) {
       rePrefix,
       dearPrefix,
       sectionTitles,
+      coverImage,
     })
 
     localStorage.setItem("customerInfo", JSON.stringify(customerInfo))
@@ -156,6 +180,9 @@ export function ReportProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("rePrefix", JSON.stringify(rePrefix))
     localStorage.setItem("dearPrefix", JSON.stringify(dearPrefix))
     localStorage.setItem("sectionTitles", JSON.stringify(sectionTitles))
+    // Save cover image
+    localStorage.setItem("coverImage", JSON.stringify(coverImage))
+    localStorage.setItem("coverImageSize", JSON.stringify(coverImageSize))
     setHasUnsavedChanges(false)
   }
 
@@ -186,6 +213,11 @@ export function ReportProvider({ children }: { children: ReactNode }) {
         setDearPrefix,
         sectionTitles,
         setSectionTitles,
+        // Add cover image to context
+        coverImage,
+        setCoverImage,
+        coverImageSize,
+        setCoverImageSize,
       }}
     >
       {children}
@@ -193,10 +225,16 @@ export function ReportProvider({ children }: { children: ReactNode }) {
   )
 }
 
+// Original hook that throws an error if used outside of a ReportProvider
 export function useReportContext() {
   const context = useContext(ReportContext)
   if (context === undefined) {
     throw new Error("useReportContext must be used within a ReportProvider")
   }
   return context
+}
+
+// New safe hook that returns null if used outside of a ReportProvider
+export function useSafeReportContext() {
+  return useContext(ReportContext)
 }

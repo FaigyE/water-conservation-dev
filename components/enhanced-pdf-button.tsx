@@ -42,10 +42,21 @@ export default function EnhancedPdfButton({
     toilet: "Toilet",
     notes: "Notes",
   })
+  // Add state for edited units
+  const [editedUnits, setEditedUnits] = useState<Record<string, string>>({})
 
   // Get the latest state from context
-  const { reportTitle, letterText, signatureName, signatureTitle, rePrefix, dearPrefix, sectionTitles } =
-    useReportContext()
+  const {
+    reportTitle,
+    letterText,
+    signatureName,
+    signatureTitle,
+    rePrefix,
+    dearPrefix,
+    sectionTitles,
+    coverImage,
+    coverImageSize,
+  } = useReportContext()
 
   // Load edited notes from localStorage
   useEffect(() => {
@@ -86,6 +97,20 @@ export default function EnhancedPdfButton({
         console.log("PDF: Loaded column headers from localStorage:", parsedHeaders)
       } catch (error) {
         console.error("PDF: Error parsing stored column headers:", error)
+      }
+    }
+  }, [])
+
+  // Load edited units from localStorage
+  useEffect(() => {
+    const storedUnits = localStorage.getItem("editedUnits")
+    if (storedUnits) {
+      try {
+        const parsedUnits = JSON.parse(storedUnits)
+        setEditedUnits(parsedUnits)
+        console.log("PDF: Loaded edited units from localStorage:", parsedUnits)
+      } catch (error) {
+        console.error("PDF: Error parsing stored units:", error)
       }
     }
   }, [])
@@ -155,19 +180,105 @@ export default function EnhancedPdfButton({
   }, [])
 
   // Filter out rows without valid unit numbers
-  const filteredData = installationData.filter((item) => {
-    // Check if Unit exists and is not empty
-    if (!item.Unit || item.Unit.trim() === "") return false
+  const filteredData = (() => {
+    const result = []
 
-    // Filter out rows with non-apartment values (often headers, totals, etc.)
-    const lowerUnit = item.Unit.toLowerCase()
-    const invalidValues = ["total", "sum", "average", "avg", "count", "header", "n/a", "na"]
-    if (invalidValues.some((val) => lowerUnit.includes(val))) return false
+    console.log("PDF: Starting to process installation data...")
+    console.log("PDF: Total rows to process:", installationData.length)
 
-    return true
-  })
+    // Load the latest edited units from localStorage
+    let latestEditedUnits: Record<string, string> = {}
+    try {
+      const storedUnits = localStorage.getItem("editedUnits")
+      if (storedUnits) {
+        latestEditedUnits = JSON.parse(storedUnits)
+        console.log("PDF: Loaded latest edited units from localStorage:", latestEditedUnits)
+      }
+    } catch (error) {
+      console.error("PDF: Error parsing stored units:", error)
+    }
 
-  console.log(`PDF: Filtered ${installationData.length - filteredData.length} rows without valid unit numbers`)
+    for (let i = 0; i < installationData.length; i++) {
+      const item = installationData[i]
+
+      // Get the unit value
+      const unitValue = item.Unit
+
+      // Log each row for debugging
+      console.log(
+        `PDF Row ${i + 1}: Unit="${unitValue}" (type: ${typeof unitValue}, length: ${unitValue ? unitValue.length : "null"})`,
+      )
+
+      // Check if unit is truly empty - be very strict about this
+      if (
+        unitValue === undefined ||
+        unitValue === null ||
+        unitValue === "" ||
+        (typeof unitValue === "string" && unitValue.trim() === "")
+      ) {
+        console.log(
+          `PDF STOPPING: Found empty unit at row ${i + 1}. Unit value: "${unitValue}". Processed ${result.length} valid rows.`,
+        )
+        break // Stop processing immediately when we find an empty unit
+      }
+
+      // Convert to string and trim for further checks
+      const trimmedUnit = String(unitValue).trim()
+
+      // If after trimming it's empty, stop
+      if (trimmedUnit === "") {
+        console.log(
+          `PDF STOPPING: Found empty unit after trimming at row ${i + 1}. Original: "${unitValue}". Processed ${result.length} valid rows.`,
+        )
+        break
+      }
+
+      // Check if this unit has been marked for deletion (only if completely blank)
+      if (latestEditedUnits[trimmedUnit] === "") {
+        console.log(`PDF: Skipping deleted unit "${trimmedUnit}" (marked as completely blank)`)
+        continue
+      }
+
+      // Filter out rows with non-apartment values (often headers, totals, etc.) but continue processing
+      const lowerUnit = trimmedUnit.toLowerCase()
+      const invalidValues = ["total", "sum", "average", "avg", "count", "header", "n/a", "na"]
+      if (invalidValues.some((val) => lowerUnit.includes(val))) {
+        console.log(
+          `PDF: Skipping invalid unit "${trimmedUnit}" at row ${i + 1} (contains: ${invalidValues.find((val) => lowerUnit.includes(val))})`,
+        )
+        continue // Skip this row but continue processing
+      }
+
+      console.log(`PDF: Adding valid unit: "${trimmedUnit}"`)
+      result.push(item)
+    }
+
+    console.log(`PDF: Final result: ${result.length} valid units processed`)
+
+    // Sort the results by unit number in ascending order
+    return result.sort((a, b) => {
+      const unitA = a.Unit
+      const unitB = b.Unit
+
+      // Get edited unit numbers if they exist
+      const finalUnitA = latestEditedUnits[unitA] !== undefined ? latestEditedUnits[unitA] : unitA
+      const finalUnitB = latestEditedUnits[unitB] !== undefined ? latestEditedUnits[unitB] : unitB
+
+      // Try to parse as numbers first
+      const numA = Number.parseInt(finalUnitA)
+      const numB = Number.parseInt(finalUnitB)
+
+      // If both are valid numbers, sort numerically
+      if (!isNaN(numA) && !isNaN(numB)) {
+        return numA - numB
+      }
+
+      // Otherwise, sort alphabetically
+      return finalUnitA.localeCompare(finalUnitB, undefined, { numeric: true, sensitivity: "base" })
+    })
+  })()
+
+  console.log(`PDF: Processed ${filteredData.length} valid units (stopped at first empty unit, sorted ascending)`)
 
   // Add this helper function inside the component
   // Helper function to find the toilet column and check if installed
@@ -278,6 +389,58 @@ export default function EnhancedPdfButton({
   }
 
   const handleGeneratePdf = async () => {
+    // Add the findUnitColumn function after the handleGeneratePdf function declaration
+    // (around line 100, before the actual PDF generation code begins)
+
+    // Add this function to find the unit column
+    const findUnitColumn = (data: InstallationData[]): string | null => {
+      if (!data || data.length === 0) return null
+
+      const item = data[0]
+
+      // Log all column names for debugging
+      console.log("PDF: All column names for unit detection:", Object.keys(item))
+
+      // First, look specifically for "BLDG/Unit" (case-insensitive)
+      for (const key of Object.keys(item)) {
+        if (key.toLowerCase() === "bldg/unit" || key.toLowerCase() === "bldg/unit") {
+          console.log(`PDF: Found exact match for BLDG/Unit column: ${key}`)
+          return key
+        }
+      }
+
+      // Then look for columns containing both "bldg" and "unit"
+      for (const key of Object.keys(item)) {
+        const keyLower = key.toLowerCase()
+        if (keyLower.includes("bldg") && keyLower.includes("unit")) {
+          console.log(`PDF: Found column containing both BLDG and Unit: ${key}`)
+          return key
+        }
+      }
+
+      // Then look for any column containing "unit" or "apt" or "apartment"
+      const unitKeywords = ["unit", "apt", "apartment", "room", "number"]
+      for (const key of Object.keys(item)) {
+        const keyLower = key.toLowerCase()
+        for (const keyword of unitKeywords) {
+          if (keyLower.includes(keyword)) {
+            console.log(`PDF: Found column containing ${keyword}: ${key}`)
+            return key
+          }
+        }
+      }
+
+      // If no suitable column found, use the first column as a fallback
+      // This assumes the first column is likely to be the unit identifier
+      const firstKey = Object.keys(item)[0]
+      console.log(`PDF: No unit column found, using first column as fallback: ${firstKey}`)
+      return firstKey
+    }
+
+    // Now find the unit column
+    const unitColumn = findUnitColumn(filteredData)
+    console.log("PDF: Using unit column:", unitColumn)
+
     if (!jsPDFLoaded || !logoLoaded || !footerLoaded) {
       alert("PDF generator or images are still loading. Please try again in a moment.")
       return
@@ -450,13 +613,53 @@ export default function EnhancedPdfButton({
       doc.setFontSize(24)
       doc.text(reportTitle, 105, 80, { align: "center" })
 
-      doc.setFontSize(14)
-      doc.text("ATTN:", 105, 120, { align: "center" })
+      // Add the address
       doc.setFontSize(16)
-      doc.text(customerInfo.customerName, 105, 130, { align: "center" })
-      doc.text(customerInfo.propertyName, 105, 140, { align: "center" })
-      doc.text(`${customerInfo.address}`, 105, 150, { align: "center" })
-      doc.text(`${customerInfo.city}, ${customerInfo.state} ${customerInfo.zip}`, 105, 160, { align: "center" })
+      doc.text(`${customerInfo.address}`, 105, 100, { align: "center" })
+      doc.text(`${customerInfo.city}, ${customerInfo.state} ${customerInfo.zip}`, 105, 110, { align: "center" })
+
+      // Add cover image if available
+      if (coverImage) {
+        try {
+          // Create a temporary image to get dimensions
+          const tempImg = new Image()
+          tempImg.src = coverImage
+
+          // Calculate dimensions to fit within the page while maintaining aspect ratio
+          const maxWidth = 120 // Maximum width in mm
+          const maxHeight = 60 // Maximum height in mm
+
+          let imgWidth = tempImg.width
+          let imgHeight = tempImg.height
+
+          if (imgWidth > 0 && imgHeight > 0) {
+            // Calculate the scaling factor
+            const scaleWidth = maxWidth / imgWidth
+            const scaleHeight = maxHeight / imgHeight
+            const scale = Math.min(scaleWidth, scaleHeight) * (coverImageSize / 100) // Apply user's size preference
+
+            imgWidth = imgWidth * scale
+            imgHeight = imgHeight * scale
+
+            // Center the image horizontally
+            const imgX = (pageWidth - imgWidth) / 2
+
+            // Position the image below the address
+            doc.addImage(coverImage, "JPEG", imgX, 120, imgWidth, imgHeight)
+          }
+        } catch (error) {
+          console.error("Error adding cover image to PDF:", error)
+        }
+      }
+
+      // Adjust the ATTN position to be below the image
+      doc.setFontSize(14)
+      // If there's a cover image, position ATTN further down
+      const attnY = coverImage ? 190 : 120
+      doc.text("ATTN:", 105, attnY, { align: "center" })
+      doc.setFontSize(16)
+      doc.text(customerInfo.customerName, 105, attnY + 10, { align: "center" })
+      doc.text(customerInfo.propertyName, 105, attnY + 20, { align: "center" })
 
       // Letter Page
       doc.addPage()
@@ -766,10 +969,9 @@ export default function EnhancedPdfButton({
 
           // Check if this is a special unit (shower room, office, etc.)
           const isSpecialUnit =
-            item.Unit.toLowerCase().includes("shower") ||
-            item.Unit.toLowerCase().includes("office") ||
-            item.Unit.toLowerCase().includes("laundry") ||
-            item.Unit.toLowerCase().includes("laundry")
+            (unitColumn && item[unitColumn] && item[unitColumn].toLowerCase().includes("shower")) ||
+            (unitColumn && item[unitColumn] && item[unitColumn].toLowerCase().includes("office")) ||
+            (unitColumn && item[unitColumn] && item[unitColumn].toLowerCase().includes("laundry"))
 
           // Get values for each cell using the found column names
           // Update the PDF generation to use edited installation values
@@ -779,28 +981,28 @@ export default function EnhancedPdfButton({
           const kitchenAerator =
             isSpecialUnit || !kitchenAeratorColumn
               ? ""
-              : latestEditedInstallations[item.Unit]?.kitchen !== undefined
-                ? latestEditedInstallations[item.Unit].kitchen
+              : latestEditedInstallations[item[unitColumn]]?.kitchen !== undefined
+                ? latestEditedInstallations[item[unitColumn]].kitchen
                 : getAeratorDescription(item[kitchenAeratorColumn], "kitchen")
 
           // Replace the bathroomAerator calculation with:
           const bathroomAerator = !bathroomAeratorColumn
             ? ""
-            : latestEditedInstallations[item.Unit]?.bathroom !== undefined
-              ? latestEditedInstallations[item.Unit].bathroom
+            : latestEditedInstallations[item[unitColumn]]?.bathroom !== undefined
+              ? latestEditedInstallations[item[unitColumn]].bathroom
               : getAeratorDescription(item[bathroomAeratorColumn], "bathroom")
 
           // Replace the showerHead calculation with:
           const showerHead = !showerHeadColumn
             ? ""
-            : latestEditedInstallations[item.Unit]?.shower !== undefined
-              ? latestEditedInstallations[item.Unit].shower
+            : latestEditedInstallations[item[unitColumn]]?.shower !== undefined
+              ? latestEditedInstallations[item[unitColumn]].shower
               : getAeratorDescription(item[showerHeadColumn], "shower")
 
           // Replace the toilet calculation with:
           const toilet =
-            latestEditedInstallations[item.Unit]?.toilet !== undefined
-              ? latestEditedInstallations[item.Unit].toilet
+            latestEditedInstallations[item[unitColumn]]?.toilet !== undefined
+              ? latestEditedInstallations[item[unitColumn]].toilet
               : hasToiletInstalled(item)
                 ? "0.8 GPF"
                 : ""
@@ -836,7 +1038,8 @@ export default function EnhancedPdfButton({
           noteText = formatNote(noteText)
 
           // Use edited note if available from localStorage
-          const finalNoteText = latestEditedNotes[item.Unit] !== undefined ? latestEditedNotes[item.Unit] : noteText
+          const finalNoteText =
+            latestEditedNotes[item[unitColumn]] !== undefined ? latestEditedNotes[item[unitColumn]] : noteText
 
           // Calculate how many lines the note will take
           let noteLines: string[] = []
@@ -865,7 +1068,9 @@ export default function EnhancedPdfButton({
           doc.setFontSize(9)
 
           colIndex = 0
-          doc.text(item.Unit, columnPositions[colIndex++], yPos)
+          const displayUnit =
+            editedUnits[item[unitColumn]] !== undefined ? editedUnits[item[unitColumn]] : item[unitColumn]
+          doc.text(displayUnit, columnPositions[colIndex++], yPos)
 
           if (hasKitchenAerators) {
             const kitchenText = kitchenAerator === "No Touch." ? "—" : kitchenAerator

@@ -7,6 +7,7 @@ import { useEffect, useState } from "react"
 interface Note {
   unit: string
   note: string
+  [key: string]: any // Allow dynamic properties
 }
 
 interface ReportNotesPageProps {
@@ -19,6 +20,25 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
   const { setNotes, setHasUnsavedChanges, sectionTitles, setSectionTitles } = useReportContext()
   // Add state to track edited notes
   const [editedNotes, setEditedNotes] = useState<Note[]>([])
+
+  // Function to find the unit property in notes
+  const getUnitProperty = (note: Note): string => {
+    // If the note has a property that looks like a unit identifier, use that
+    for (const key of Object.keys(note)) {
+      const keyLower = key.toLowerCase()
+      if (
+        keyLower === "unit" ||
+        keyLower === "bldg/unit" ||
+        keyLower.includes("unit") ||
+        keyLower.includes("apt") ||
+        keyLower.includes("room")
+      ) {
+        return key
+      }
+    }
+    // Default to "unit"
+    return "unit"
+  }
 
   // Initialize editedNotes with the provided notes on mount and when notes change
   useEffect(() => {
@@ -134,33 +154,36 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
             </tr>
           </thead>
           <tbody>
-            {filteredNotes.map((note, index) => (
-              <tr key={index}>
-                <td className="py-2 px-4 border-b">
-                  {isEditable ? (
-                    <EditableText
-                      value={note.unit}
-                      onChange={(value) => handleNoteChange(index, "unit", value)}
-                      placeholder="Unit"
-                    />
-                  ) : (
-                    note.unit
-                  )}
-                </td>
-                <td className="py-2 px-4 border-b">
-                  {isEditable ? (
-                    <EditableText
-                      value={note.note}
-                      onChange={(value) => handleNoteChange(index, "note", value)}
-                      placeholder="Note"
-                      multiline={true}
-                    />
-                  ) : (
-                    note.note
-                  )}
-                </td>
-              </tr>
-            ))}
+            {filteredNotes.map((note, index) => {
+              const unitProp = getUnitProperty(note)
+              return (
+                <tr key={index}>
+                  <td className="py-2 px-4 border-b">
+                    {isEditable ? (
+                      <EditableText
+                        value={note[unitProp]}
+                        onChange={(value) => handleNoteChange(index, unitProp, value)}
+                        placeholder="Unit"
+                      />
+                    ) : (
+                      note[unitProp]
+                    )}
+                  </td>
+                  <td className="py-2 px-4 border-b">
+                    {isEditable ? (
+                      <EditableText
+                        value={note.note}
+                        onChange={(value) => handleNoteChange(index, "note", value)}
+                        placeholder="Note"
+                        multiline={true}
+                      />
+                    ) : (
+                      note.note
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -205,18 +228,19 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
                 {pageNotes.map((note, index) => {
                   // Calculate the actual index in the full notes array
                   const actualIndex = pageIndex * notesPerPage + index
+                  const unitProp = getUnitProperty(note)
 
                   return (
                     <tr key={index}>
                       <td className="py-2 px-4 border-b">
                         {isEditable ? (
                           <EditableText
-                            value={note.unit}
-                            onChange={(value) => handleNoteChange(actualIndex, "unit", value)}
+                            value={note[unitProp]}
+                            onChange={(value) => handleNoteChange(actualIndex, unitProp, value)}
                             placeholder="Unit"
                           />
                         ) : (
-                          note.unit
+                          note[unitProp]
                         )}
                       </td>
                       <td className="py-2 px-4 border-b">

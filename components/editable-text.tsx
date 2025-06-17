@@ -11,6 +11,7 @@ interface EditableTextProps {
   className?: string
   multiline?: boolean
   placeholder?: string
+  displayValue?: string // Add this new prop
 }
 
 export default function EditableText({
@@ -19,6 +20,7 @@ export default function EditableText({
   className = "",
   multiline = false,
   placeholder = "Click to edit",
+  displayValue, // Add this parameter
 }: EditableTextProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [text, setText] = useState(value)
@@ -93,7 +95,7 @@ export default function EditableText({
       onClick={handleClick}
       className={`cursor-pointer hover:bg-gray-100 p-1 rounded ${className} ${!value ? "text-gray-400 italic" : ""}`}
     >
-      {value || placeholder}
+      {displayValue || value || placeholder}
     </div>
   )
 }

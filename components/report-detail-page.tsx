@@ -42,6 +42,9 @@ export default function ReportDetailPage({
   // Add after the editedNotes state declaration
   const [editedInstallations, setEditedInstallations] = useState<Record<string, Record<string, string>>>({})
 
+  // Add state for edited unit numbers
+  const [editedUnits, setEditedUnits] = useState<Record<string, string>>({})
+
   // Add state for column headers
   const [columnHeaders, setColumnHeaders] = useState({
     unit: "Unit",
@@ -52,20 +55,143 @@ export default function ReportDetailPage({
     notes: "Notes",
   })
 
-  // Filter out rows without valid unit/apartment numbers
-  const filteredData = installationData.filter((item) => {
-    // Check if Unit exists and is not empty
-    if (!item.Unit || item.Unit.trim() === "") return false
+  // Update the findUnitColumn function to better detect "BLDG/Unit" and other variations
+  // Replace the existing findUnitColumn function with this improved version:
 
-    // Filter out rows with non-apartment values (often headers, totals, etc.)
-    const lowerUnit = item.Unit.toLowerCase()
-    const invalidValues = ["total", "sum", "average", "avg", "count", "header", "n/a", "na"]
-    if (invalidValues.some((val) => lowerUnit.includes(val))) return false
+  const findUnitColumn = (data: InstallationData[]): string | null => {
+    if (!data || data.length === 0) return null
 
-    return true
-  })
+    const item = data[0]
 
-  console.log(`Filtered ${installationData.length - filteredData.length} rows without valid unit numbers`)
+    // Log all column names for debugging
+    console.log("All column names for unit detection:", Object.keys(item))
+
+    // First, look specifically for "BLDG/Unit" (case-insensitive)
+    for (const key of Object.keys(item)) {
+      if (key.toLowerCase().includes("unit")) {
+        return key
+      }
+    }
+
+    // Then look for columns containing both "bldg" and "unit"
+    for (const key of Object.keys(item)) {
+      const keyLower = key.toLowerCase()
+      if (keyLower.includes("bldg") && keyLower.includes("unit")) {
+        console.log(`Found column containing both BLDG and Unit: ${key}`)
+        return key
+      }
+    }
+
+    // Then look for any column containing "unit" or "apt" or "apartment"
+    const unitKeywords = ["unit", "apt", "apartment", "room", "number"]
+    for (const key of Object.keys(item)) {
+      const keyLower = key.toLowerCase()
+      for (const keyword of unitKeywords) {
+        if (keyLower.includes(keyword)) {
+          console.log(`Found column containing ${keyword}: ${key}`)
+          return key
+        }
+      }
+    }
+
+    // If no suitable column found, use the first column as a fallback
+    // This assumes the first column is likely to be the unit identifier
+    const firstKey = Object.keys(item)[0]
+    console.log(`No unit column found, using first column as fallback: ${firstKey}`)
+    return firstKey
+  }
+
+  // Get the unit column name
+  const unitColumn = findUnitColumn(installationData)
+
+  // Filter out rows without valid unit/apartment numbers and deleted units
+  const filteredData = (() => {
+    const result = []
+
+    console.log("Detail page: Starting to process installation data...")
+    console.log("Detail page: Total rows to process:", installationData.length)
+
+    for (let i = 0; i < installationData.length; i++) {
+      const item = installationData[i]
+
+      // Get the unit value using the detected unit column
+      const unitValue = unitColumn ? item[unitColumn] : item.Unit
+
+      // Log each row for debugging
+      console.log(
+        `Detail page Row ${i + 1}: Unit="${unitValue}" (type: ${typeof unitValue}, length: ${unitValue ? unitValue.length : "null"})`,
+      )
+
+      // Check if unit is truly empty - be very strict about this
+      if (
+        unitValue === undefined ||
+        unitValue === null ||
+        unitValue === "" ||
+        (typeof unitValue === "string" && unitValue.trim() === "")
+      ) {
+        console.log(
+          `Detail page STOPPING: Found empty unit at row ${i + 1}. Unit value: "${unitValue}". Processed ${result.length} valid rows.`,
+        )
+        break // Stop processing immediately when we find an empty unit
+      }
+
+      // Convert to string and trim for further checks
+      const trimmedUnit = String(unitValue).trim()
+
+      // If after trimming it's empty, stop
+      if (trimmedUnit === "") {
+        console.log(
+          `Detail page STOPPING: Found empty unit after trimming at row ${i + 1}. Original: "${unitValue}". Processed ${result.length} valid rows.`,
+        )
+        break
+      }
+
+      // Check if this unit has been marked for deletion (only if completely blank)
+      if (editedUnits[trimmedUnit] === "") {
+        console.log(`Detail page: Skipping deleted unit "${trimmedUnit}" (marked as blank)`)
+        continue
+      }
+
+      // Filter out rows with non-apartment values (often headers, totals, etc.) but continue processing
+      const lowerUnit = trimmedUnit.toLowerCase()
+      const invalidValues = ["total", "sum", "average", "avg", "count", "header", "n/a", "na"]
+      if (invalidValues.some((val) => lowerUnit.includes(val))) {
+        console.log(
+          `Detail page: Skipping invalid unit "${trimmedUnit}" at row ${i + 1} (contains: ${invalidValues.find((val) => lowerUnit.includes(val))})`,
+        )
+        continue // Skip this row but continue processing
+      }
+
+      console.log(`Detail page: Adding valid unit: "${trimmedUnit}"`)
+      result.push(item)
+    }
+
+    console.log(`Detail page: Final result: ${result.length} valid units processed`)
+
+    // Sort the results by unit number in ascending order
+    return result.sort((a, b) => {
+      const unitA = a[unitColumn] || a.Unit
+      const unitB = b[unitColumn] || b.Unit
+
+      // Get edited unit numbers if they exist
+      const finalUnitA = editedUnits[unitA] !== undefined ? editedUnits[unitA] : unitA
+      const finalUnitB = editedUnits[unitB] !== undefined ? editedUnits[unitB] : unitB
+
+      // Try to parse as numbers first
+      const numA = Number.parseInt(finalUnitA)
+      const numB = Number.parseInt(finalUnitB)
+
+      // If both are valid numbers, sort numerically
+      if (!isNaN(numA) && !isNaN(numB)) {
+        return numA - numB
+      }
+
+      // Otherwise, sort alphabetically
+      return finalUnitA.localeCompare(finalUnitB, undefined, { numeric: true, sensitivity: "base" })
+    })
+  })()
+
+  console.log(`Processed ${filteredData.length} valid units (stopped at first empty unit, sorted ascending)`)
 
   // Split data into pages of 10 items each
   const itemsPerPage = 10
@@ -196,6 +322,7 @@ export default function ReportDetailPage({
   console.log("Raw data sample:", filteredData.slice(0, 2))
 
   console.log("Found column names:", {
+    unitColumn,
     kitchenAeratorColumn,
     bathroomAeratorColumn,
     showerHeadColumn,
@@ -205,7 +332,7 @@ export default function ReportDetailPage({
   console.log(
     "First 5 items in installation data:",
     filteredData.slice(0, 5).map((item) => ({
-      Unit: item.Unit,
+      Unit: unitColumn ? item[unitColumn] : undefined,
       KitchenAerator: kitchenAeratorColumn ? item[kitchenAeratorColumn] : undefined,
       BathroomAerator: bathroomAeratorColumn ? item[bathroomAeratorColumn] : undefined,
       ShowerHead: showerHeadColumn ? item[showerHeadColumn] : undefined,
@@ -297,6 +424,37 @@ export default function ReportDetailPage({
     }
   }
 
+  // Add function to handle unit edits - UPDATED to only delete when completely blank
+  const handleUnitEdit = (originalUnit: string, newUnit: string) => {
+    if (isEditable) {
+      // Only mark for deletion if the new unit is completely empty (no whitespace)
+      if (newUnit === "") {
+        // If unit is completely empty, mark for deletion
+        setEditedUnits((prev) => {
+          const updated = { ...prev, [originalUnit]: "" }
+          console.log(`Marking unit ${originalUnit} for deletion (completely blank)`)
+
+          // Save to localStorage immediately
+          localStorage.setItem("editedUnits", JSON.stringify(updated))
+
+          return updated
+        })
+      } else {
+        // Update unit number (even if it's just whitespace or any other text)
+        setEditedUnits((prev) => {
+          const updated = { ...prev, [originalUnit]: newUnit }
+          console.log(`Updated unit ${originalUnit} to "${newUnit}"`)
+
+          // Save to localStorage immediately
+          localStorage.setItem("editedUnits", JSON.stringify(updated))
+
+          return updated
+        })
+      }
+      setHasUnsavedChanges(true)
+    }
+  }
+
   // Handle section title change
   const handleSectionTitleChange = (value: string) => {
     if (isEditable) {
@@ -368,6 +526,20 @@ export default function ReportDetailPage({
         console.log("Loaded column headers from localStorage:", parsedHeaders)
       } catch (error) {
         console.error("Error parsing stored column headers:", error)
+      }
+    }
+  }, [])
+
+  // Load edited units from localStorage
+  useEffect(() => {
+    const storedUnits = localStorage.getItem("editedUnits")
+    if (storedUnits) {
+      try {
+        const parsedUnits = JSON.parse(storedUnits)
+        setEditedUnits(parsedUnits)
+        console.log("Loaded edited units from localStorage:", parsedUnits)
+      } catch (error) {
+        console.error("Error parsing stored units:", error)
       }
     }
   }, [])
@@ -488,9 +660,9 @@ export default function ReportDetailPage({
             {filteredData.map((item, index) => {
               // Check if this is a special unit (shower room, office, etc.)
               const isSpecialUnit =
-                item.Unit.toLowerCase().includes("shower") ||
-                item.Unit.toLowerCase().includes("office") ||
-                item.Unit.toLowerCase().includes("laundry")
+                (unitColumn && item[unitColumn] && item[unitColumn].toLowerCase().includes("shower")) ||
+                (unitColumn && item[unitColumn] && item[unitColumn].toLowerCase().includes("office")) ||
+                (unitColumn && item[unitColumn] && item[unitColumn].toLowerCase().includes("laundry"))
 
               // Get aerator descriptions using the found column names
               const kitchenAerator =
@@ -537,22 +709,24 @@ export default function ReportDetailPage({
               notes = formatNote(notes)
 
               // Use edited note if available
-              const finalNote = editedNotes[item.Unit] !== undefined ? editedNotes[item.Unit] : notes.trim()
+              const finalNote =
+                editedNotes[item[unitColumn]] !== undefined ? editedNotes[item[unitColumn]] : notes.trim()
 
               return (
                 <tr key={index}>
                   <td className="py-2 px-2 border-b">
                     {isEditable ? (
                       <EditableText
-                        value={item.Unit}
-                        onChange={(value) => {
-                          // This would require updating the installation data
-                          // which is more complex and would need to be handled in a parent component
-                        }}
-                        placeholder="Unit"
+                        value={
+                          editedUnits[item[unitColumn]] !== undefined ? editedUnits[item[unitColumn]] : item[unitColumn]
+                        }
+                        onChange={(value) => handleUnitEdit(item[unitColumn], value)}
+                        placeholder="Unit (clear completely to delete row)"
                       />
+                    ) : editedUnits[item[unitColumn]] !== undefined ? (
+                      editedUnits[item[unitColumn]]
                     ) : (
-                      item.Unit
+                      item[unitColumn]
                     )}
                   </td>
                   {hasKitchenAerators && (
@@ -560,13 +734,13 @@ export default function ReportDetailPage({
                       {isEditable ? (
                         <EditableText
                           value={
-                            editedInstallations[item.Unit]?.kitchen !== undefined
-                              ? editedInstallations[item.Unit].kitchen
+                            editedInstallations[item[unitColumn]]?.kitchen !== undefined
+                              ? editedInstallations[item[unitColumn]].kitchen
                               : kitchenAerator === "No Touch."
                                 ? ""
                                 : kitchenAerator
                           }
-                          onChange={(value) => handleInstallationEdit(item.Unit, "kitchen", value)}
+                          onChange={(value) => handleInstallationEdit(item[unitColumn], "kitchen", value)}
                           placeholder="Kitchen"
                           className="text-center"
                         />
@@ -582,13 +756,13 @@ export default function ReportDetailPage({
                       {isEditable ? (
                         <EditableText
                           value={
-                            editedInstallations[item.Unit]?.bathroom !== undefined
-                              ? editedInstallations[item.Unit].bathroom
+                            editedInstallations[item[unitColumn]]?.bathroom !== undefined
+                              ? editedInstallations[item[unitColumn]].bathroom
                               : bathroomAerator === "No Touch."
                                 ? ""
                                 : bathroomAerator
                           }
-                          onChange={(value) => handleInstallationEdit(item.Unit, "bathroom", value)}
+                          onChange={(value) => handleInstallationEdit(item[unitColumn], "bathroom", value)}
                           placeholder="Bathroom"
                           className="text-center"
                         />
@@ -604,13 +778,13 @@ export default function ReportDetailPage({
                       {isEditable ? (
                         <EditableText
                           value={
-                            editedInstallations[item.Unit]?.shower !== undefined
-                              ? editedInstallations[item.Unit].shower
+                            editedInstallations[item[unitColumn]]?.shower !== undefined
+                              ? editedInstallations[item[unitColumn]].shower
                               : shower === "No Touch."
                                 ? ""
                                 : shower
                           }
-                          onChange={(value) => handleInstallationEdit(item.Unit, "shower", value)}
+                          onChange={(value) => handleInstallationEdit(item[unitColumn], "shower", value)}
                           placeholder="Shower"
                           className="text-center"
                         />
@@ -626,11 +800,11 @@ export default function ReportDetailPage({
                       {isEditable ? (
                         <EditableText
                           value={
-                            editedInstallations[item.Unit]?.toilet !== undefined
-                              ? editedInstallations[item.Unit].toilet
+                            editedInstallations[item[unitColumn]]?.toilet !== undefined
+                              ? editedInstallations[item[unitColumn]].toilet
                               : toilet || ""
                           }
-                          onChange={(value) => handleInstallationEdit(item.Unit, "toilet", value)}
+                          onChange={(value) => handleInstallationEdit(item[unitColumn], "toilet", value)}
                           placeholder="Toilet"
                           className="text-center"
                         />
@@ -644,7 +818,7 @@ export default function ReportDetailPage({
                       {isEditable ? (
                         <EditableText
                           value={finalNote}
-                          onChange={(value) => handleNoteEdit(item.Unit, value)}
+                          onChange={(value) => handleNoteEdit(item[unitColumn], value)}
                           placeholder="Notes"
                           multiline={true}
                         />
@@ -704,9 +878,9 @@ export default function ReportDetailPage({
                 {pageData.map((item, index) => {
                   // Check if this is a special unit (shower room, office, etc.)
                   const isSpecialUnit =
-                    item.Unit.toLowerCase().includes("shower") ||
-                    item.Unit.toLowerCase().includes("office") ||
-                    item.Unit.toLowerCase().includes("laundry")
+                    (unitColumn && item[unitColumn] && item[unitColumn].toLowerCase().includes("shower")) ||
+                    (unitColumn && item[unitColumn] && item[unitColumn].toLowerCase().includes("office")) ||
+                    (unitColumn && item[unitColumn] && item[unitColumn].toLowerCase().includes("laundry"))
 
                   // Get aerator descriptions using the found column names
                   const kitchenAerator =
@@ -753,11 +927,14 @@ export default function ReportDetailPage({
                   notes = formatNote(notes)
 
                   // Use edited note if available
-                  const finalNote = editedNotes[item.Unit] !== undefined ? editedNotes[item.Unit] : notes.trim()
+                  const finalNote =
+                    editedNotes[item[unitColumn]] !== undefined ? editedNotes[item[unitColumn]] : notes.trim()
 
                   return (
                     <tr key={index}>
-                      <td className="py-2 px-2 border-b">{item.Unit}</td>
+                      <td className="py-2 px-2 border-b">
+                        {editedUnits[item[unitColumn]] !== undefined ? editedUnits[item[unitColumn]] : item[unitColumn]}
+                      </td>
                       {hasKitchenAerators && (
                         <td className="py-2 px-2 border-b text-center">
                           {kitchenAerator === "No Touch." ? "—" : kitchenAerator}
