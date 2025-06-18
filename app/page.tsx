@@ -213,7 +213,7 @@ export default function Home() {
       console.log("Last 3 rows of final data:", parsedData.slice(-3))
 
       // Store data in localStorage
-      localStorage.setItem("rawInstallationData", JSON.stringify(parsedData))
+      localStorage.setItem("installationData", JSON.stringify(parsedData))
       localStorage.setItem(
         "customerInfo",
         JSON.stringify({
@@ -232,8 +232,8 @@ export default function Home() {
       localStorage.setItem("coverImage", JSON.stringify(coverImage))
       localStorage.setItem("coverImageSize", JSON.stringify(imageSize))
 
-      // Navigate to CSV preview page instead of report page
-      router.push("/csv-preview")
+      // Navigate to report page
+      router.push("/report")
     } catch (error) {
       console.error("Error parsing file:", error)
       alert(error instanceof Error ? error.message : "An error occurred while processing the file")
@@ -336,7 +336,10 @@ export default function Home() {
             <div className="space-y-2">
               <h2 className="text-xl font-semibold">Installation Data</h2>
               <p className="text-sm text-muted-foreground">
-                Upload the CSV or Excel file containing installation data
+                Upload the CSV or Excel file containing installation data. The system will automatically detect columns
+                containing "unit" (like "BLDG/Unit") for unit identification. Excel files will be converted to CSV
+                format internally for consistent processing. Processing will automatically stop at the first empty unit
+                cell and skip any total rows.
               </p>
               <Input id="csvFile" type="file" accept=".csv,.xlsx,.xls" onChange={handleFileChange} required />
             </div>

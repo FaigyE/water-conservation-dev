@@ -137,14 +137,10 @@ function ReportContent() {
   const loadData = useCallback(() => {
     try {
       const storedInstallationData = localStorage.getItem("installationData")
-      const storedToiletCount = localStorage.getItem("toiletCount")
 
-      if (storedInstallationData && storedToiletCount) {
+      if (storedInstallationData) {
         const parsedInstallationData = JSON.parse(storedInstallationData)
-        const parsedToiletCount = JSON.parse(storedToiletCount)
-
         setInstallationData(parsedInstallationData)
-        setToiletCount(parsedToiletCount)
 
         // Log the schema of the CSV data
         if (parsedInstallationData && parsedInstallationData.length > 0) {
@@ -157,31 +153,132 @@ function ReportContent() {
           setCsvSchema(schema)
         }
 
-        // The data is already filtered and sorted from the CSV preview page
-        setFilteredData(parsedInstallationData)
+        // Helper function to find the toilet column and extract the count
+        const getToiletInfo = () => {
+          if (!parsedInstallationData || parsedInstallationData.length === 0) return { count: 0, totalCount: 0 }
 
-        // Group notes for the notes pages - only include leak issues and custom notes
-        const notes = parsedInstallationData
+          // Get the first item to check column names
+          const firstItem = parsedInstallationData[0]
+
+          // Find the toilet column by looking for keys that start with "Toilets Installed:"
+          const toiletColumn = Object.keys(firstItem).find((key) => key.startsWith("Toilets Installed:"))
+
+          if (!toiletColumn) return { count: 0, totalCount: 0 }
+
+          // Extract the total count from the column name (e.g., "Toilets Installed: 53" -> 53)
+          const totalCountMatch = toiletColumn.match(/Toilets Installed:\s*(\d+)/)
+          const totalCount = totalCountMatch ? Number.parseInt(totalCountMatch[1]) : 0
+
+          // Count installed toilets
+          let count = 0
+          parsedInstallationData.forEach((item) => {
+            if (item[toiletColumn] && item[toiletColumn] !== "") {
+              count++
+            }
+          })
+
+          return { count, totalCount }
+        }
+
+        // Replace the toilet counting code in useEffect with this
+        const { count, totalCount } = getToiletInfo()
+        setToiletCount(totalCount) // Use the total count from the column name
+
+        // Filter out rows without valid unit/apartment numbers and stop at first empty unit
+        const filtered = (() => {
+          const result = []
+
+          console.log("Starting to process installation data...")
+          console.log("Total rows to process:", parsedInstallationData.length)
+
+          for (let i = 0; i < parsedInstallationData.length; i++) {
+            const item = parsedInstallationData[i]
+
+            // Get the unit value - be very explicit about this
+            const unitValue = item.Unit
+
+            // Log each row for debugging
+            console.log(
+              `Row ${i + 1}: Unit="${unitValue}" (type: ${typeof unitValue}, length: ${unitValue ? unitValue.length : "null"})`,
+            )
+
+            // Check if unit is truly empty - be very strict about this
+            if (
+              unitValue === undefined ||
+              unitValue === null ||
+              unitValue === "" ||
+              (typeof unitValue === "string" && unitValue.trim() === "")
+            ) {
+              console.log(
+                `STOPPING: Found empty unit at row ${i + 1}. Unit value: "${unitValue}". Processed ${result.length} valid rows.`,
+              )
+              break // Stop processing immediately when we find an empty unit
+            }
+
+            // Convert to string and trim for further checks
+            const trimmedUnit = String(unitValue).trim()
+
+            // If after trimming it's empty, stop
+            if (trimmedUnit === "") {
+              console.log(
+                `STOPPING: Found empty unit after trimming at row ${i + 1}. Original: "${unitValue}". Processed ${result.length} valid rows.`,
+              )
+              break
+            }
+
+            // Filter out rows with non-apartment values (often headers, totals, etc.) but continue processing
+            const lowerUnit = trimmedUnit.toLowerCase()
+            const invalidValues = ["total", "sum", "average", "avg", "count", "header", "n/a", "na"]
+            if (invalidValues.some((val) => lowerUnit.includes(val))) {
+              console.log(
+                `Skipping invalid unit "${trimmedUnit}" at row ${i + 1} (contains: ${invalidValues.find((val) => lowerUnit.includes(val))})`,
+              )
+              continue // Skip this row but continue processing
+            }
+
+            console.log(`Adding valid unit: "${trimmedUnit}"`)
+            result.push(item)
+          }
+
+          console.log(`Final result: ${result.length} valid units processed`)
+
+          // Sort the results by unit number in ascending order
+          return result.sort((a, b) => {
+            const unitA = a.Unit
+            const unitB = b.Unit
+
+            // Try to parse as numbers first
+            const numA = Number.parseInt(unitA)
+            const numB = Number.parseInt(unitB)
+
+            // If both are valid numbers, sort numerically
+            if (!isNaN(numA) && !isNaN(numB)) {
+              return numA - numB
+            }
+
+            // Otherwise, sort alphabetically
+            return unitA.localeCompare(unitB, undefined, { numeric: true, sensitivity: "base" })
+          })
+        })()
+
+        setFilteredData(filtered)
+
+        // Group notes for the notes pages - only include leak issues
+        const notes = filtered
           .filter(
             (item: InstallationData) =>
               item["Leak Issue Kitchen Faucet"] ||
               item["Leak Issue Bath Faucet"] ||
-              item["Tub Spout/Diverter Leak Issue"] ||
-              (item.Notes && item.Notes.trim() !== ""),
+              item["Tub Spout/Diverter Leak Issue"],
           )
           .map((item: InstallationData) => {
             let noteText = ""
-            if (item["Leak Issue Kitchen Faucet"]) noteText += "Dripping from kitchen faucet. "
+            if (item["Leak Issue Kitchen Faucet"]) noteText += "Driping from kitchen faucet. "
             if (item["Leak Issue Bath Faucet"]) noteText += "Dripping from bathroom faucet. "
             if (item["Tub Spout/Diverter Leak Issue"] === "Light") noteText += "Light leak from tub spout/ diverter. "
             if (item["Tub Spout/Diverter Leak Issue"] === "Moderate")
               noteText += "Moderate leak from tub spout/diverter. "
             if (item["Tub Spout/Diverter Leak Issue"] === "Heavy") noteText += "Heavy leak from tub spout/ diverter. "
-
-            // Add custom notes from CSV preview
-            if (item.Notes && item.Notes.trim() !== "") {
-              noteText += item.Notes + " "
-            }
 
             return {
               unit: item.Unit,
