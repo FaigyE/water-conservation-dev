@@ -1098,10 +1098,19 @@ export default function EnhancedPdfButton({
           let noteText = ""
           if (item["Leak Issue Kitchen Faucet"]) noteText += "Dripping from kitchen faucet. "
           if (item["Leak Issue Bath Faucet"]) noteText += "Dripping from bathroom faucet. "
-          if (item["Tub Spout/Diverter Leak Issue"] === "Light") noteText += "Light leak from tub spout/diverter. "
-          if (item["Tub Spout/Diverter Leak Issue"] === "Moderate")
-            noteText += "Moderate leak from tub spout/diverter. "
-          if (item["Tub Spout/Diverter Leak Issue"] === "Heavy") noteText += "Heavy leak from tub spout/diverter. "
+          if (item["Tub Spout/Diverter Leak Issue"]) {
+            const leakValue = item["Tub Spout/Diverter Leak Issue"]
+            if (leakValue === "Light") {
+              noteText += "Light leak from tub spout/diverter. "
+            } else if (leakValue === "Moderate") {
+              noteText += "Moderate leak from tub spout/diverter. "
+            } else if (leakValue === "Heavy") {
+              noteText += "Heavy leak from tub spout/diverter. "
+            } else {
+              // For any other value, just write "leak from tub spout/diverter"
+              noteText += "Leak from tub spout/diverter. "
+            }
+          }
 
           // Check if all installation columns are blank
           const isUnitNotAccessed =

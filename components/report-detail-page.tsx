@@ -123,9 +123,19 @@ export default function ReportDetailPage({
     let notes = ""
     if (item["Leak Issue Kitchen Faucet"]) notes += "Dripping from kitchen faucet. "
     if (item["Leak Issue Bath Faucet"]) notes += "Dripping from bathroom faucet. "
-    if (item["Tub Spout/Diverter Leak Issue"] === "Light") notes += "Light leak from tub spout/diverter. "
-    if (item["Tub Spout/Diverter Leak Issue"] === "Moderate") notes += "Moderate leak from tub spout/diverter. "
-    if (item["Tub Spout/Diverter Leak Issue"] === "Heavy") notes += "Heavy leak from tub spout/diverter. "
+    if (item["Tub Spout/Diverter Leak Issue"]) {
+      const leakValue = item["Tub Spout/Diverter Leak Issue"]
+      if (leakValue === "Light") {
+        notes += "Light leak from tub spout/diverter. "
+      } else if (leakValue === "Moderate") {
+        notes += "Moderate leak from tub spout/diverter. "
+      } else if (leakValue === "Heavy") {
+        notes += "Heavy leak from tub spout/diverter. "
+      } else {
+        // For any other value, just write "leak from tub spout/diverter"
+        notes += "Leak from tub spout/diverter. "
+      }
+    }
 
     // Check if unit was not accessed (all installation columns are empty)
     const kitchenAerator = kitchenAeratorColumn ? getAeratorDescription(item[kitchenAeratorColumn], "kitchen") : ""

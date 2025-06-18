@@ -133,14 +133,18 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
     if (item["Leak Issue Bath Faucet"]) {
       notes += "Dripping from bathroom faucet. "
     }
-    if (item["Tub Spout/Diverter Leak Issue"] === "Light") {
-      notes += "Light leak from tub spout/diverter. "
-    }
-    if (item["Tub Spout/Diverter Leak Issue"] === "Moderate") {
-      notes += "Moderate leak from tub spout/diverter. "
-    }
-    if (item["Tub Spout/Diverter Leak Issue"] === "Heavy") {
-      notes += "Heavy leak from tub spout/diverter. "
+    if (item["Tub Spout/Diverter Leak Issue"]) {
+      const leakValue = item["Tub Spout/Diverter Leak Issue"]
+      if (leakValue === "Light") {
+        notes += "Light leak from tub spout/diverter. "
+      } else if (leakValue === "Moderate") {
+        notes += "Moderate leak from tub spout/diverter. "
+      } else if (leakValue === "Heavy") {
+        notes += "Heavy leak from tub spout/diverter. "
+      } else {
+        // For any other value, just write "leak from tub spout/diverter"
+        notes += "Leak from tub spout/diverter. "
+      }
     }
 
     // For notes section, do NOT include "not accessed" messages
@@ -160,21 +164,10 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
     const unitColumn = findUnitColumn(installationData)
     console.log("Notes: Using unit column:", unitColumn)
 
-    // Try to load notes from localStorage first
-    const storedNotes = localStorage.getItem("reportNotes")
-    if (storedNotes) {
-      try {
-        const parsedNotes = JSON.parse(storedNotes)
-        setEditedNotes(parsedNotes)
-        console.log("Notes: Loaded notes from localStorage:", parsedNotes.length, "notes")
-        return
-      } catch (error) {
-        console.error("Notes: Error parsing stored notes:", error)
-      }
-    }
+    // Always regenerate notes from installation data - don't use stored notes
+    console.log("Notes: Regenerating notes from installation data...")
 
     // Process installation data to create notes
-    console.log("Notes: Processing installation data to create notes...")
     const processedNotes = installationData
       .map((item, index) => {
         const unitValue = unitColumn ? item[unitColumn] : item.Unit
@@ -201,7 +194,10 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
 
     console.log("Notes: Final processed notes:", processedNotes.length, "notes")
 
+    // Always use the freshly processed notes
     setEditedNotes(processedNotes)
+
+    // Update localStorage with fresh data
     localStorage.setItem("reportNotes", JSON.stringify(processedNotes))
   }, [installationData])
 
