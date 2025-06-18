@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { FileDown } from 'lucide-react'
+import { FileDown } from "lucide-react"
 import type { CustomerInfo, InstallationData, Note } from "@/lib/types"
 import { useReportContext } from "@/lib/report-context"
 // Import the formatNote function
@@ -26,7 +26,7 @@ export default function EnhancedPdfButton({
   const [logoLoaded, setLogoLoaded] = useState(false)
   const [footerLoaded, setFooterLoaded] = useState(false)
   const [logoImage, setLogoImage] = useState<string | null>(null)
-  const [footerImage, setFooterImage: any] = useState<{ dataUrl: string; width: number; height: number } | null>(null)
+  const [footerImage, setFooterImage] = useState<{ dataUrl: string; width: number; height: number } | null>(null)
   const [signatureLoaded, setSignatureLoaded] = useState(false)
   const [signatureImage, setSignatureImage] = useState<string | null>(null)
   const [editedDetailNotes, setEditedDetailNotes] = useState<Record<string, string>>({})
