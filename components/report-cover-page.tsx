@@ -12,8 +12,7 @@ interface ReportCoverPageProps {
 }
 
 export default function ReportCoverPage({ customerInfo, isEditable = true }: ReportCoverPageProps) {
-  const { reportTitle, setReportTitle, setCustomerInfo, setHasUnsavedChanges, coverImage, setCoverImage } =
-    useReportContext()
+  const { reportTitle, setReportTitle, setCustomerInfo, setCoverImage, coverImage } = useReportContext()
 
   const handleCustomerInfoChange = (field: keyof CustomerInfo, value: string) => {
     if (isEditable) {
@@ -22,15 +21,12 @@ export default function ReportCoverPage({ customerInfo, isEditable = true }: Rep
         console.log(`Updated ${field} to "${value}"`, updated)
         return updated
       })
-      setHasUnsavedChanges(true)
     }
   }
 
-  // Keep this function but we won't use it
   const handleCoverImageUpload = (imageDataUrl: string) => {
     if (isEditable) {
       setCoverImage(imageDataUrl || null)
-      setHasUnsavedChanges(true)
     }
   }
 
@@ -54,7 +50,6 @@ export default function ReportCoverPage({ customerInfo, isEditable = true }: Rep
               value={reportTitle}
               onChange={(value) => {
                 setReportTitle(value)
-                setHasUnsavedChanges(true)
               }}
               className="text-3xl font-bold text-center"
               placeholder="Report Title"

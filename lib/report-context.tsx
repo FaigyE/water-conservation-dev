@@ -20,9 +20,10 @@ interface ReportContextType {
   setSignatureName: React.Dispatch<React.SetStateAction<string>>
   signatureTitle: string
   setSignatureTitle: React.Dispatch<React.SetStateAction<string>>
-  hasUnsavedChanges: boolean
-  setHasUnsavedChanges: React.Dispatch<React.SetStateAction<boolean>>
-  saveChanges: () => void
+  // Remove these lines:
+  // hasUnsavedChanges: boolean
+  // setHasUnsavedChanges: React.Dispatch<React.SetStateAction<boolean>>
+  // saveChanges: () => void
   // Add new editable text elements
   rePrefix: string
   setRePrefix: React.Dispatch<React.SetStateAction<string>>
@@ -71,7 +72,8 @@ export function ReportProvider({ children }: { children: ReactNode }) {
   const [reportTitle, setReportTitle] = useState<string>("Water Conservation Installation Report")
   const [signatureName, setSignatureName] = useState<string>("Zev Stern, CWEP")
   const [signatureTitle, setSignatureTitle] = useState<string>("Chief Operating Officer")
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false)
+  // Remove this line:
+  // const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false)
 
   // Add new state for editable text elements
   const [rePrefix, setRePrefix] = useState<string>("RE:")
@@ -153,38 +155,7 @@ export function ReportProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Save changes to localStorage
-  const saveChanges = () => {
-    console.log("Saving changes to localStorage:", {
-      customerInfo,
-      toiletCount,
-      notes,
-      letterText,
-      reportTitle,
-      signatureName,
-      signatureTitle,
-      rePrefix,
-      dearPrefix,
-      sectionTitles,
-      coverImage,
-    })
-
-    localStorage.setItem("customerInfo", JSON.stringify(customerInfo))
-    localStorage.setItem("toiletCount", JSON.stringify(toiletCount))
-    localStorage.setItem("reportNotes", JSON.stringify(notes))
-    localStorage.setItem("letterText", JSON.stringify(letterText))
-    localStorage.setItem("reportTitle", JSON.stringify(reportTitle))
-    localStorage.setItem("signatureName", JSON.stringify(signatureName))
-    localStorage.setItem("signatureTitle", JSON.stringify(signatureTitle))
-    // Save new editable text elements
-    localStorage.setItem("rePrefix", JSON.stringify(rePrefix))
-    localStorage.setItem("dearPrefix", JSON.stringify(dearPrefix))
-    localStorage.setItem("sectionTitles", JSON.stringify(sectionTitles))
-    // Save cover image
-    localStorage.setItem("coverImage", JSON.stringify(coverImage))
-    localStorage.setItem("coverImageSize", JSON.stringify(coverImageSize))
-    setHasUnsavedChanges(false)
-  }
+  // Remove the saveChanges function entirely
 
   return (
     <ReportContext.Provider
@@ -203,9 +174,10 @@ export function ReportProvider({ children }: { children: ReactNode }) {
         setSignatureName,
         signatureTitle,
         setSignatureTitle,
-        hasUnsavedChanges,
-        setHasUnsavedChanges,
-        saveChanges,
+        // Remove these lines:
+        // hasUnsavedChanges,
+        // setHasUnsavedChanges,
+        // saveChanges,
         // Add new editable text elements to context
         rePrefix,
         setRePrefix,

@@ -3,6 +3,8 @@
 import { useReportContext } from "@/lib/report-context"
 import EditableText from "@/components/editable-text"
 import { useEffect, useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Plus, Trash2 } from "lucide-react"
 
 interface Note {
   unit: string
@@ -17,7 +19,7 @@ interface ReportNotesPageProps {
 }
 
 export default function ReportNotesPage({ notes, isPreview = true, isEditable = true }: ReportNotesPageProps) {
-  const { setNotes, setHasUnsavedChanges, sectionTitles, setSectionTitles } = useReportContext()
+  const { setNotes, sectionTitles, setSectionTitles } = useReportContext()
   // Add state to track edited notes
   const [editedNotes, setEditedNotes] = useState<Note[]>([])
 
@@ -77,6 +79,26 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
     notePages.push(filteredNotes.slice(i, i + notesPerPage))
   }
 
+  // Add function to sort notes by unit number
+  const sortNotesByUnit = (notesToSort: Note[]) => {
+    return [...notesToSort].sort((a, b) => {
+      const unitA = a.unit || ""
+      const unitB = b.unit || ""
+
+      // Try to parse as numbers first
+      const numA = Number.parseInt(unitA)
+      const numB = Number.parseInt(unitB)
+
+      // If both are valid numbers, sort numerically
+      if (!isNaN(numA) && !isNaN(numB)) {
+        return numA - numB
+      }
+
+      // Otherwise, sort alphabetically
+      return unitA.localeCompare(unitB, undefined, { numeric: true, sensitivity: "base" })
+    })
+  }
+
   const handleNoteChange = (index: number, field: keyof Note, value: string) => {
     if (isEditable) {
       // Create a deep copy of the edited notes array
@@ -85,19 +107,62 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
 
       console.log(`Updating note ${index}, field ${field} to "${value}"`, updatedNotes[index])
 
-      // Update the local state
-      setEditedNotes(updatedNotes)
-
-      // Update the context
-      setNotes(updatedNotes)
-
-      // Save to localStorage immediately
-      localStorage.setItem("reportNotes", JSON.stringify(updatedNotes))
-
-      // Mark as having unsaved changes
-      setHasUnsavedChanges(true)
+      // If we're changing a unit number, resort the entire array
+      if (field === "unit" || field === getUnitProperty(updatedNotes[index])) {
+        const sortedNotes = sortNotesByUnit(updatedNotes)
+        setEditedNotes(sortedNotes)
+        setNotes(sortedNotes)
+        localStorage.setItem("reportNotes", JSON.stringify(sortedNotes))
+        console.log("Notes resorted after unit change:", sortedNotes)
+      } else {
+        // Update the local state
+        setEditedNotes(updatedNotes)
+        setNotes(updatedNotes)
+        localStorage.setItem("reportNotes", JSON.stringify(updatedNotes))
+      }
     }
   }
+
+  // Add function to add a new note
+  const handleAddNote = () => {
+    if (isEditable) {
+      const newNote: Note = {
+        unit: "",
+        note: "",
+      }
+
+      const updatedNotes = [...editedNotes, newNote]
+      setEditedNotes(updatedNotes)
+      setNotes(updatedNotes)
+      localStorage.setItem("reportNotes", JSON.stringify(updatedNotes))
+      console.log("Added new note:", newNote)
+    }
+  }
+
+  // Add function to delete a note
+  const handleDeleteNote = (index: number) => {
+    if (isEditable) {
+      const updatedNotes = editedNotes.filter((_, i) => i !== index)
+      setEditedNotes(updatedNotes)
+      setNotes(updatedNotes)
+      localStorage.setItem("reportNotes", JSON.stringify(updatedNotes))
+      console.log(`Deleted note at index ${index}`)
+    }
+  }
+
+  // Add useEffect to resort notes when loaded
+  useEffect(() => {
+    if (editedNotes.length > 0) {
+      const sortedNotes = sortNotesByUnit(editedNotes)
+      // Only update if the order actually changed
+      if (JSON.stringify(sortedNotes) !== JSON.stringify(editedNotes)) {
+        setEditedNotes(sortedNotes)
+        setNotes(sortedNotes)
+        localStorage.setItem("reportNotes", JSON.stringify(sortedNotes))
+        console.log("Notes resorted on load:", sortedNotes)
+      }
+    }
+  }, [notes]) // Depend on notes prop changes
 
   // Handle section title change
   const handleSectionTitleChange = (value: string) => {
@@ -111,7 +176,6 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
 
         return updated
       })
-      setHasUnsavedChanges(true)
     }
   }
 
@@ -133,28 +197,37 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
 
       {/* Notes content */}
       <div className="mb-16">
-        <h2 className="text-xl font-bold mb-6">
-          {isEditable ? (
-            <EditableText
-              value={notesTitle}
-              onChange={handleSectionTitleChange}
-              placeholder="Section Title"
-              className="text-xl font-bold"
-            />
-          ) : (
-            notesTitle
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold">
+            {isEditable ? (
+              <EditableText
+                value={notesTitle}
+                onChange={handleSectionTitleChange}
+                placeholder="Section Title"
+                className="text-xl font-bold"
+              />
+            ) : (
+              notesTitle
+            )}
+          </h2>
+          {isEditable && (
+            <Button onClick={handleAddNote} size="sm" className="flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Add Note
+            </Button>
           )}
-        </h2>
+        </div>
 
         <table className="w-full">
           <thead>
             <tr>
               <th className="text-left py-2 px-4 border-b">Unit</th>
               <th className="text-left py-2 px-4 border-b">Notes</th>
+              {isEditable && <th className="text-left py-2 px-4 border-b w-16">Actions</th>}
             </tr>
           </thead>
           <tbody>
-            {filteredNotes.map((note, index) => {
+            {editedNotes.map((note, index) => {
               const unitProp = getUnitProperty(note)
               return (
                 <tr key={index}>
@@ -181,6 +254,18 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
                       note.note
                     )}
                   </td>
+                  {isEditable && (
+                    <td className="py-2 px-4 border-b">
+                      <Button
+                        onClick={() => handleDeleteNote(index)}
+                        size="sm"
+                        variant="outline"
+                        className="h-8 w-8 p-0"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </td>
+                  )}
                 </tr>
               )
             })}

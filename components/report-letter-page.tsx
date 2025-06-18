@@ -19,7 +19,7 @@ export default function ReportLetterPage({ customerInfo, toiletCount, isEditable
     signatureTitle,
     setSignatureTitle,
     setCustomerInfo,
-    setHasUnsavedChanges,
+    // Remove: setHasUnsavedChanges,
     // Add new editable text elements
     rePrefix,
     setRePrefix,
@@ -32,7 +32,8 @@ export default function ReportLetterPage({ customerInfo, toiletCount, isEditable
       const newLetterText = [...letterText]
       newLetterText[index] = value
       setLetterText(newLetterText)
-      setHasUnsavedChanges(true)
+      // Remove this line:
+      // setHasUnsavedChanges(true)
       console.log(`Updated letter text at index ${index} to "${value}"`)
     }
   }
@@ -44,7 +45,8 @@ export default function ReportLetterPage({ customerInfo, toiletCount, isEditable
         console.log(`Updated ${field} to "${value}"`, updated)
         return updated
       })
-      setHasUnsavedChanges(true)
+      // Remove this line:
+      // setHasUnsavedChanges(true)
     }
   }
 
@@ -105,7 +107,6 @@ export default function ReportLetterPage({ customerInfo, toiletCount, isEditable
                 value={rePrefix}
                 onChange={(value) => {
                   setRePrefix(value)
-                  setHasUnsavedChanges(true)
                 }}
                 placeholder="RE:"
                 className="mr-1"
@@ -154,7 +155,6 @@ export default function ReportLetterPage({ customerInfo, toiletCount, isEditable
                 value={dearPrefix}
                 onChange={(value) => {
                   setDearPrefix(value)
-                  setHasUnsavedChanges(true)
                 }}
                 placeholder="Dear"
                 className="mr-1"
@@ -216,7 +216,6 @@ export default function ReportLetterPage({ customerInfo, toiletCount, isEditable
               value={signatureName}
               onChange={(value) => {
                 setSignatureName(value)
-                setHasUnsavedChanges(true)
               }}
               placeholder="Signature Name"
             />
@@ -230,7 +229,6 @@ export default function ReportLetterPage({ customerInfo, toiletCount, isEditable
               value={signatureTitle}
               onChange={(value) => {
                 setSignatureTitle(value)
-                setHasUnsavedChanges(true)
               }}
               placeholder="Signature Title"
             />

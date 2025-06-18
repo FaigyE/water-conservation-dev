@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useRouter } from "next/navigation"
-import { ChevronLeft, Save } from "lucide-react"
+import { ChevronLeft } from "lucide-react"
 import ReportCoverPage from "@/components/report-cover-page"
 import ReportLetterPage from "@/components/report-letter-page"
 import ReportNotesPage from "@/components/report-notes-page"
@@ -47,16 +47,12 @@ function ReportView({
   toiletCount,
   notes,
   onBack,
-  hasUnsavedChanges,
-  saveChanges,
 }: {
   customerInfo: CustomerInfo
   installationData: InstallationData[]
   toiletCount: number
   notes: Note[]
   onBack: () => void
-  hasUnsavedChanges: boolean
-  saveChanges: () => void
 }) {
   const [currentPage, setCurrentPage] = useState("cover")
 
@@ -68,12 +64,6 @@ function ReportView({
           Back to Form
         </Button>
         <div className="flex flex-wrap gap-2">
-          {hasUnsavedChanges && (
-            <Button onClick={saveChanges} variant="outline">
-              <Save className="mr-2 h-4 w-4" />
-              Save Changes
-            </Button>
-          )}
           <EnhancedPdfButton
             customerInfo={customerInfo}
             installationData={installationData}
@@ -131,8 +121,7 @@ function ReportView({
 // Main content component
 function ReportContent() {
   const router = useRouter()
-  const { customerInfo, toiletCount, setToiletCount, notes, setNotes, hasUnsavedChanges, saveChanges } =
-    useReportContext()
+  const { customerInfo, toiletCount, setToiletCount, notes, setNotes } = useReportContext()
 
   const [installationData, setInstallationData] = useState<InstallationData[]>([])
   const [loading, setLoading] = useState(true)
@@ -335,8 +324,6 @@ function ReportContent() {
       toiletCount={toiletCount}
       notes={notes}
       onBack={handleBack}
-      hasUnsavedChanges={hasUnsavedChanges}
-      saveChanges={saveChanges}
     />
   )
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { FileDown } from "lucide-react"
+import { FileDown } from 'lucide-react'
 import type { CustomerInfo, InstallationData, Note } from "@/lib/types"
 import { useReportContext } from "@/lib/report-context"
 // Import the formatNote function
@@ -26,13 +26,15 @@ export default function EnhancedPdfButton({
   const [logoLoaded, setLogoLoaded] = useState(false)
   const [footerLoaded, setFooterLoaded] = useState(false)
   const [logoImage, setLogoImage] = useState<string | null>(null)
-  const [footerImage, setFooterImage] = useState<{ dataUrl: string; width: number; height: number } | null>(null)
+  const [footerImage, setFooterImage: any] = useState<{ dataUrl: string; width: number; height: number } | null>(null)
   const [signatureLoaded, setSignatureLoaded] = useState(false)
   const [signatureImage, setSignatureImage] = useState<string | null>(null)
   const [editedDetailNotes, setEditedDetailNotes] = useState<Record<string, string>>({})
   // Add state to track edited installations
   // Add after the editedDetailNotes state declaration
   const [editedInstallations, setEditedInstallations] = useState<Record<string, Record<string, string>>>({})
+  // Add state for edited report notes (similar to detail notes)
+  const [editedReportNotes, setEditedReportNotes] = useState<Note[]>([])
   // Add state for column headers
   const [columnHeaders, setColumnHeaders] = useState({
     unit: "Unit",
@@ -56,6 +58,7 @@ export default function EnhancedPdfButton({
     sectionTitles,
     coverImage,
     coverImageSize,
+    notes: contextNotes, // Add this to get the latest notes from context
   } = useReportContext()
 
   // Load edited notes from localStorage
@@ -83,6 +86,20 @@ export default function EnhancedPdfButton({
         console.log("PDF: Loaded edited installations from localStorage:", parsedInstallations)
       } catch (error) {
         console.error("PDF: Error parsing stored installations:", error)
+      }
+    }
+  }, [])
+
+  // Load edited report notes from localStorage
+  useEffect(() => {
+    const storedReportNotes = localStorage.getItem("reportNotes")
+    if (storedReportNotes) {
+      try {
+        const parsedReportNotes = JSON.parse(storedReportNotes)
+        setEditedReportNotes(parsedReportNotes)
+        console.log("PDF: Loaded edited report notes from localStorage:", parsedReportNotes)
+      } catch (error) {
+        console.error("PDF: Error parsing stored report notes:", error)
       }
     }
   }, [])
@@ -179,107 +196,6 @@ export default function EnhancedPdfButton({
     }
   }, [])
 
-  // Filter out rows without valid unit numbers
-  const filteredData = (() => {
-    const result = []
-
-    console.log("PDF: Starting to process installation data...")
-    console.log("PDF: Total rows to process:", installationData.length)
-
-    // Load the latest edited units from localStorage
-    let latestEditedUnits: Record<string, string> = {}
-    try {
-      const storedUnits = localStorage.getItem("editedUnits")
-      if (storedUnits) {
-        latestEditedUnits = JSON.parse(storedUnits)
-        console.log("PDF: Loaded latest edited units from localStorage:", latestEditedUnits)
-      }
-    } catch (error) {
-      console.error("PDF: Error parsing stored units:", error)
-    }
-
-    for (let i = 0; i < installationData.length; i++) {
-      const item = installationData[i]
-
-      // Get the unit value
-      const unitValue = item.Unit
-
-      // Log each row for debugging
-      console.log(
-        `PDF Row ${i + 1}: Unit="${unitValue}" (type: ${typeof unitValue}, length: ${unitValue ? unitValue.length : "null"})`,
-      )
-
-      // Check if unit is truly empty - be very strict about this
-      if (
-        unitValue === undefined ||
-        unitValue === null ||
-        unitValue === "" ||
-        (typeof unitValue === "string" && unitValue.trim() === "")
-      ) {
-        console.log(
-          `PDF STOPPING: Found empty unit at row ${i + 1}. Unit value: "${unitValue}". Processed ${result.length} valid rows.`,
-        )
-        break // Stop processing immediately when we find an empty unit
-      }
-
-      // Convert to string and trim for further checks
-      const trimmedUnit = String(unitValue).trim()
-
-      // If after trimming it's empty, stop
-      if (trimmedUnit === "") {
-        console.log(
-          `PDF STOPPING: Found empty unit after trimming at row ${i + 1}. Original: "${unitValue}". Processed ${result.length} valid rows.`,
-        )
-        break
-      }
-
-      // Check if this unit has been marked for deletion (only if completely blank)
-      if (latestEditedUnits[trimmedUnit] === "") {
-        console.log(`PDF: Skipping deleted unit "${trimmedUnit}" (marked as completely blank)`)
-        continue
-      }
-
-      // Filter out rows with non-apartment values (often headers, totals, etc.) but continue processing
-      const lowerUnit = trimmedUnit.toLowerCase()
-      const invalidValues = ["total", "sum", "average", "avg", "count", "header", "n/a", "na"]
-      if (invalidValues.some((val) => lowerUnit.includes(val))) {
-        console.log(
-          `PDF: Skipping invalid unit "${trimmedUnit}" at row ${i + 1} (contains: ${invalidValues.find((val) => lowerUnit.includes(val))})`,
-        )
-        continue // Skip this row but continue processing
-      }
-
-      console.log(`PDF: Adding valid unit: "${trimmedUnit}"`)
-      result.push(item)
-    }
-
-    console.log(`PDF: Final result: ${result.length} valid units processed`)
-
-    // Sort the results by unit number in ascending order
-    return result.sort((a, b) => {
-      const unitA = a.Unit
-      const unitB = b.Unit
-
-      // Get edited unit numbers if they exist
-      const finalUnitA = latestEditedUnits[unitA] !== undefined ? latestEditedUnits[unitA] : unitA
-      const finalUnitB = latestEditedUnits[unitB] !== undefined ? latestEditedUnits[unitB] : unitB
-
-      // Try to parse as numbers first
-      const numA = Number.parseInt(finalUnitA)
-      const numB = Number.parseInt(finalUnitB)
-
-      // If both are valid numbers, sort numerically
-      if (!isNaN(numA) && !isNaN(numB)) {
-        return numA - numB
-      }
-
-      // Otherwise, sort alphabetically
-      return finalUnitA.localeCompare(finalUnitB, undefined, { numeric: true, sensitivity: "base" })
-    })
-  })()
-
-  console.log(`PDF: Processed ${filteredData.length} valid units (stopped at first empty unit, sorted ascending)`)
-
   // Add this helper function inside the component
   // Helper function to find the toilet column and check if installed
   const getToiletColumnInfo = (item: InstallationData): { installed: boolean; columnName: string | null } => {
@@ -301,12 +217,12 @@ export default function EnhancedPdfButton({
   // Find the actual column names in the data
   // Replace the findColumnName function with this improved version
   const findColumnName = (possibleNames: string[]): string | null => {
-    if (!filteredData || filteredData.length === 0) return null
+    if (!installationData || installationData.length === 0) return null
 
     // Debug all column names in the data
-    console.log("PDF: All column names in data:", Object.keys(filteredData[0]))
+    console.log("PDF: All column names in data:", Object.keys(installationData[0]))
 
-    const item = filteredData[0]
+    const item = installationData[0]
 
     // First try exact match
     for (const key of Object.keys(item)) {
@@ -389,9 +305,6 @@ export default function EnhancedPdfButton({
   }
 
   const handleGeneratePdf = async () => {
-    // Add the findUnitColumn function after the handleGeneratePdf function declaration
-    // (around line 100, before the actual PDF generation code begins)
-
     // Add this function to find the unit column
     const findUnitColumn = (data: InstallationData[]): string | null => {
       if (!data || data.length === 0) return null
@@ -437,10 +350,6 @@ export default function EnhancedPdfButton({
       return firstKey
     }
 
-    // Now find the unit column
-    const unitColumn = findUnitColumn(filteredData)
-    console.log("PDF: Using unit column:", unitColumn)
-
     if (!jsPDFLoaded || !logoLoaded || !footerLoaded) {
       alert("PDF generator or images are still loading. Please try again in a moment.")
       return
@@ -459,6 +368,18 @@ export default function EnhancedPdfButton({
         sectionTitles,
       })
 
+      // Load the latest edited units from localStorage right before generating the PDF
+      let latestEditedUnits: Record<string, string> = {}
+      try {
+        const storedUnits = localStorage.getItem("editedUnits")
+        if (storedUnits) {
+          latestEditedUnits = JSON.parse(storedUnits)
+          console.log("PDF: Loaded latest edited units from localStorage:", latestEditedUnits)
+        }
+      } catch (error) {
+        console.error("PDF: Error parsing stored units:", error)
+      }
+
       // Load the latest edited notes from localStorage right before generating the PDF
       let latestEditedNotes: Record<string, string> = {}
       try {
@@ -471,8 +392,6 @@ export default function EnhancedPdfButton({
         console.error("PDF: Error parsing stored detail notes:", error)
       }
 
-      // Update the handleGeneratePdf function to load the latest edited installations
-      // Add after loading the latest edited notes
       // Load the latest edited installations from localStorage right before generating the PDF
       let latestEditedInstallations: Record<string, Record<string, string>> = {}
       try {
@@ -497,21 +416,171 @@ export default function EnhancedPdfButton({
         console.error("PDF: Error parsing stored column headers:", error)
       }
 
-      console.log("Using edited installations:", latestEditedInstallations)
-      console.log("Using column headers:", latestColumnHeaders)
-
-      // Load the latest edited report notes from localStorage
-      let latestReportNotes: Note[] = [...notes]
+      // Load the latest edited report notes from localStorage - UPDATED VERSION
+      let latestReportNotes: Note[] = []
       try {
+        // Load from localStorage first (most recent changes)
         const storedReportNotes = localStorage.getItem("reportNotes")
         if (storedReportNotes) {
           latestReportNotes = JSON.parse(storedReportNotes)
-          console.log("PDF: Loaded latest report notes from localStorage:", latestReportNotes)
+          console.log("PDF: Loaded report notes from localStorage:", latestReportNotes)
+        } else if (contextNotes && contextNotes.length > 0) {
+          // Fallback to context notes
+          latestReportNotes = [...contextNotes]
+          console.log("PDF: Using context notes as fallback:", latestReportNotes)
+        } else {
+          // Final fallback to props
+          latestReportNotes = [...notes]
+          console.log("PDF: Using props notes as final fallback:", latestReportNotes)
         }
+
+        // Always sort the notes to ensure consistent ordering
+        latestReportNotes = latestReportNotes.sort((a, b) => {
+          const unitA = a.unit || ""
+          const unitB = b.unit || ""
+
+          // Try to parse as numbers first
+          const numA = Number.parseInt(unitA)
+          const numB = Number.parseInt(unitB)
+
+          // If both are valid numbers, sort numerically
+          if (!isNaN(numA) && !isNaN(numB)) {
+            return numA - numB
+          }
+
+          // Otherwise, sort alphabetically
+          return unitA.localeCompare(unitB, undefined, { numeric: true, sensitivity: "base" })
+        })
+
+        console.log("PDF: Final sorted report notes for PDF:", latestReportNotes)
       } catch (error) {
-        console.error("PDF: Error parsing stored report notes:", error)
+        console.error("PDF: Error processing report notes:", error)
+        // Fallback to props if everything fails
+        latestReportNotes = [...notes]
       }
 
+      // Also load the latest notes from the context to ensure we have the most recent changes
+      // const contextNotes = useReportContext().notes // Moved to top level
+      // let contextNotes = useReportContext().notes
+      // if (contextNotes && contextNotes.length > 0) {
+      //   console.log("PDF: Context notes available:", contextNotes)
+      //   // Use context notes if they're more recent (have more items or different content)
+      //   if (contextNotes.length >= latestReportNotes.length) {
+      //     latestReportNotes = [...contextNotes].sort((a, b) => {
+      //       const unitA = a.unit || ""
+      //       const unitB = b.unit || ""
+
+      //       // Try to parse as numbers first
+      //       const numA = Number.parseInt(unitA)
+      //       const numB = Number.parseInt(unitB)
+
+      //       // If both are valid numbers, sort numerically
+      //       if (!isNaN(numA) && !isNaN(numB)) {
+      //         return numA - numB
+      //       }
+
+      //       // Otherwise, sort alphabetically
+      //       return unitA.localeCompare(unitB, undefined, { numeric: true, sensitivity: "base" })
+      //     })
+      //     console.log("PDF: Using context notes instead:", latestReportNotes)
+      //   }
+      // }
+
+      // Now find the unit column
+      const unitColumn = findUnitColumn(installationData)
+      console.log("PDF: Using unit column:", unitColumn)
+
+      // Filter out rows without valid unit numbers and apply edits
+      const filteredData = (() => {
+        const result = []
+
+        console.log("PDF: Starting to process installation data...")
+        console.log("PDF: Total rows to process:", installationData.length)
+
+        for (let i = 0; i < installationData.length; i++) {
+          const item = installationData[i]
+
+          // Get the unit value
+          const unitValue = unitColumn ? item[unitColumn] : item.Unit
+
+          // Log each row for debugging
+          console.log(
+            `PDF Row ${i + 1}: Unit="${unitValue}" (type: ${typeof unitValue}, length: ${unitValue ? unitValue.length : "null"})`,
+          )
+
+          // Check if unit is truly empty - be very strict about this
+          if (
+            unitValue === undefined ||
+            unitValue === null ||
+            unitValue === "" ||
+            (typeof unitValue === "string" && unitValue.trim() === "")
+          ) {
+            console.log(
+              `PDF STOPPING: Found empty unit at row ${i + 1}. Unit value: "${unitValue}". Processed ${result.length} valid rows.`,
+            )
+            break // Stop processing immediately when we find an empty unit
+          }
+
+          // Convert to string and trim for further checks
+          const trimmedUnit = String(unitValue).trim()
+
+          // If after trimming it's empty, stop
+          if (trimmedUnit === "") {
+            console.log(
+              `PDF STOPPING: Found empty unit after trimming at row ${i + 1}. Original: "${unitValue}". Processed ${result.length} valid rows.`,
+            )
+            break
+          }
+
+          // Check if this unit has been marked for deletion (only if completely blank)
+          if (latestEditedUnits[trimmedUnit] === "") {
+            console.log(`PDF: Skipping deleted unit "${trimmedUnit}" (marked as completely blank)`)
+            continue
+          }
+
+          // Filter out rows with non-apartment values (often headers, totals, etc.) but continue processing
+          const lowerUnit = trimmedUnit.toLowerCase()
+          const invalidValues = ["total", "sum", "average", "avg", "count", "header", "n/a", "na"]
+          if (invalidValues.some((val) => lowerUnit.includes(val))) {
+            console.log(
+              `PDF: Skipping invalid unit "${trimmedUnit}" at row ${i + 1} (contains: ${invalidValues.find((val) => lowerUnit.includes(val))})`,
+            )
+            continue // Skip this row but continue processing
+          }
+
+          console.log(`PDF: Adding valid unit: "${trimmedUnit}"`)
+          result.push(item)
+        }
+
+        console.log(`PDF: Final result: ${result.length} valid units processed`)
+
+        // Sort the results by unit number in ascending order
+        return result.sort((a, b) => {
+          const unitA = unitColumn ? a[unitColumn] : a.Unit
+          const unitB = unitColumn ? b[unitColumn] : b.Unit
+
+          // Get edited unit numbers if they exist
+          const finalUnitA = latestEditedUnits[unitA] !== undefined ? latestEditedUnits[unitA] : unitA
+          const finalUnitB = latestEditedUnits[unitB] !== undefined ? latestEditedUnits[unitB] : unitB
+
+          // Try to parse as numbers first
+          const numA = Number.parseInt(finalUnitA)
+          const numB = Number.parseInt(finalUnitB)
+
+          // If both are valid numbers, sort numerically
+          if (!isNaN(numA) && !isNaN(numB)) {
+            return numA - numB
+          }
+
+          // Otherwise, sort alphabetically
+          return finalUnitA.localeCompare(finalUnitB, undefined, { numeric: true, sensitivity: "base" })
+        })
+      })()
+
+      console.log(`PDF: Processed ${filteredData.length} valid units (stopped at first empty unit, sorted ascending)`)
+
+      console.log("Using edited installations:", latestEditedInstallations)
+      console.log("Using column headers:", latestColumnHeaders)
       console.log("Using edited detail notes:", latestEditedNotes)
       console.log("Using report notes:", latestReportNotes)
 
@@ -589,13 +658,30 @@ export default function EnhancedPdfButton({
       let totalPages = 2 // Cover page + letter page
 
       // Estimate notes pages
-      const filteredNotes = latestReportNotes.filter((note) => {
-        if (!note.unit || note.unit.trim() === "") return false
-        const lowerUnit = note.unit.toLowerCase()
-        const invalidValues = ["total", "sum", "average", "avg", "count", "header", "n/a", "na"]
-        if (invalidValues.some((val) => lowerUnit.includes(val))) return false
-        return true
-      })
+      const filteredNotes = latestReportNotes
+        .filter((note) => {
+          if (!note.unit || note.unit.trim() === "") return false
+          const lowerUnit = note.unit.toLowerCase()
+          const invalidValues = ["total", "sum", "average", "avg", "count", "header", "n/a", "na"]
+          if (invalidValues.some((val) => lowerUnit.includes(val))) return false
+          return true
+        })
+        .sort((a, b) => {
+          const unitA = a.unit || ""
+          const unitB = b.unit || ""
+
+          // Try to parse as numbers first
+          const numA = Number.parseInt(unitA)
+          const numB = Number.parseInt(unitB)
+
+          // If both are valid numbers, sort numerically
+          if (!isNaN(numA) && !isNaN(numB)) {
+            return numA - numB
+          }
+
+          // Otherwise, sort alphabetically
+          return unitA.localeCompare(unitB, undefined, { numeric: true, sensitivity: "base" })
+        })
 
       // Estimate how many notes can fit on a page
       const estimatedNotesPerPage = Math.floor(availableHeight / 10) // Assuming 10mm per note
@@ -813,7 +899,7 @@ export default function EnhancedPdfButton({
       console.log(
         "PDF: First 5 items in installation data:",
         filteredData.slice(0, 5).map((item) => ({
-          Unit: item.Unit,
+          Unit: unitColumn ? item[unitColumn] : item.Unit,
           KitchenAerator: kitchenAeratorColumn ? item[kitchenAeratorColumn] : undefined,
           BathroomAerator: bathroomAeratorColumn ? item[bathroomAeratorColumn] : undefined,
           ShowerHead: showerHeadColumn ? item[showerHeadColumn] : undefined,
@@ -1007,9 +1093,6 @@ export default function EnhancedPdfButton({
                 ? "0.8 GPF"
                 : ""
 
-          // Check both possible column names for toilet installation
-          // const toilet = hasToiletInstalled(item) ? "0.8 GPF" : ""
-
           // Update the notes compilation in the PDF generation
           // Compile notes with proper sentence case - only include leak issues
           let noteText = ""
@@ -1068,8 +1151,12 @@ export default function EnhancedPdfButton({
           doc.setFontSize(9)
 
           colIndex = 0
+          // Use the edited unit number if available, otherwise use the original
+          const originalUnitValue = unitColumn ? item[unitColumn] : item.Unit
           const displayUnit =
-            editedUnits[item[unitColumn]] !== undefined ? editedUnits[item[unitColumn]] : item[unitColumn]
+            latestEditedUnits[originalUnitValue] !== undefined
+              ? latestEditedUnits[originalUnitValue]
+              : originalUnitValue
           doc.text(displayUnit, columnPositions[colIndex++], yPos)
 
           if (hasKitchenAerators) {

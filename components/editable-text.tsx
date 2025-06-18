@@ -3,7 +3,6 @@
 import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
-import { useReportContext } from "@/lib/report-context"
 
 interface EditableTextProps {
   value: string
@@ -25,7 +24,8 @@ export default function EditableText({
   const [isEditing, setIsEditing] = useState(false)
   const [text, setText] = useState(value)
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
-  const { setHasUnsavedChanges } = useReportContext()
+  // Remove this line:
+  // const { setHasUnsavedChanges } = useReportContext()
 
   // Update local state when prop value changes
   useEffect(() => {
@@ -40,7 +40,8 @@ export default function EditableText({
     setIsEditing(false)
     if (text !== value) {
       onChange(text)
-      setHasUnsavedChanges(true)
+      // Remove this line:
+      // setHasUnsavedChanges(true)
       console.log(`Text changed from "${value}" to "${text}"`)
     }
   }
