@@ -5,7 +5,6 @@ import EditableText from "@/components/editable-text"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Plus, Trash2 } from "lucide-react"
-import { formatNote } from "@/lib/utils/aerator-helpers"
 
 interface Note {
   unit: string
@@ -23,25 +22,6 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
   const { setNotes, sectionTitles, setSectionTitles } = useReportContext()
   // Add state to track edited notes
   const [editedNotes, setEditedNotes] = useState<Note[]>([])
-
-  // Get installation data from localStorage directly (same as details page)
-  const [installationData, setInstallationData] = useState<any[]>([])
-
-  // Load installation data from localStorage
-  useEffect(() => {
-    try {
-      const storedInstallationData = localStorage.getItem("installationData")
-      if (storedInstallationData) {
-        const parsedData = JSON.parse(storedInstallationData)
-        setInstallationData(parsedData)
-        console.log("Notes: Loaded installation data from localStorage:", parsedData.length, "items")
-      } else {
-        console.log("Notes: No installation data found in localStorage")
-      }
-    } catch (error) {
-      console.error("Notes: Error loading installation data:", error)
-    }
-  }, [])
 
   // Function to find the unit property in notes
   const getUnitProperty = (note: Note): string => {
@@ -62,165 +42,31 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
     return "unit"
   }
 
-  const findUnitColumn = (data: any[]): string | null => {
-    if (!data || data.length === 0) return null
-
-    const item = data[0]
-    console.log("Notes: All column names for unit detection:", Object.keys(item))
-
-    for (const key of Object.keys(item)) {
-      if (key.toLowerCase().includes("unit")) {
-        console.log("Notes: Found unit column:", key)
-        return key
-      }
-    }
-
-    const unitKeywords = ["unit", "apt", "apartment", "room", "number"]
-    for (const key of Object.keys(item)) {
-      const keyLower = key.toLowerCase()
-      for (const keyword of unitKeywords) {
-        if (keyLower.includes(keyword)) {
-          console.log(`Notes: Found column containing ${keyword}: ${key}`)
-          return key
-        }
-      }
-    }
-
-    const firstKey = Object.keys(item)[0]
-    console.log(`Notes: No unit column found, using first column as fallback: ${firstKey}`)
-    return firstKey
-  }
-
-  const getToiletColumnInfo = (item: any): { installed: boolean; columnName: string | null } => {
-    const toiletColumn = Object.keys(item).find((key) => key.startsWith("Toilets Installed:"))
-    if (toiletColumn && item[toiletColumn] && item[toiletColumn] !== "") {
-      return { installed: true, columnName: toiletColumn }
-    }
-    return { installed: false, columnName: null }
-  }
-
-  const hasToiletInstalled = (item: any): boolean => {
-    return getToiletColumnInfo(item).installed
-  }
-
-  const findColumnName = (possibleNames: string[]): string | null => {
-    if (!installationData || installationData.length === 0) return null
-    const item = installationData[0]
-
-    for (const key of Object.keys(item)) {
-      if (possibleNames.includes(key)) {
-        return key
-      }
-    }
-
-    for (const key of Object.keys(item)) {
-      for (const possibleName of possibleNames) {
-        if (key.toLowerCase() === possibleName.toLowerCase()) {
-          return key
-        }
-      }
-    }
-
-    return null
-  }
-
-  const compileNotesForUnit = (item: any, unitColumn: string | null, includeNotAccessed = false): string => {
-    // Compile notes from leak issues only
-    let notes = ""
-    if (item["Leak Issue Kitchen Faucet"]) {
-      notes += "Dripping from kitchen faucet. "
-    }
-    if (item["Leak Issue Bath Faucet"]) {
-      notes += "Dripping from bathroom faucet. "
-    }
-    if (item["Tub Spout/Diverter Leak Issue"] === "Light") {
-      notes += "Light leak from tub spout/diverter. "
-    }
-    if (item["Tub Spout/Diverter Leak Issue"] === "Moderate") {
-      notes += "Moderate leak from tub spout/diverter. "
-    }
-    if (item["Tub Spout/Diverter Leak Issue"] === "Heavy") {
-      notes += "Heavy leak from tub spout/diverter. "
-    }
-
-    // For notes section, do NOT include "not accessed" messages
-    // Only return leak-related notes
-    return formatNote(notes.trim())
-  }
-
-  // Initialize editedNotes using installation data (same as details page)
+  // Initialize editedNotes with the provided notes on mount and when notes change
   useEffect(() => {
-    console.log("Notes: Processing installation data, length:", installationData.length)
-
-    if (!installationData || installationData.length === 0) {
-      console.log("Notes: No installation data available")
-      return
-    }
-
-    const unitColumn = findUnitColumn(installationData)
-    console.log("Notes: Using unit column:", unitColumn)
-
     // Try to load notes from localStorage first
     const storedNotes = localStorage.getItem("reportNotes")
     if (storedNotes) {
       try {
         const parsedNotes = JSON.parse(storedNotes)
         setEditedNotes(parsedNotes)
-        console.log("Notes: Loaded notes from localStorage:", parsedNotes.length, "notes")
-        return
+        console.log("Loaded notes from localStorage:", parsedNotes)
       } catch (error) {
-        console.error("Notes: Error parsing stored notes:", error)
+        console.error("Error parsing stored notes:", error)
+        setEditedNotes([...notes]) // Fallback to props
       }
+    } else {
+      setEditedNotes([...notes]) // Use props if nothing in localStorage
     }
-
-    // Process installation data to create notes
-    console.log("Notes: Processing installation data to create notes...")
-    const processedNotes = installationData
-      .map((item, index) => {
-        const unitValue = unitColumn ? item[unitColumn] : item.Unit
-        console.log(`Notes: Processing item ${index + 1}, unit: ${unitValue}`)
-
-        // For notes section, do NOT include "not accessed" messages (includeNotAccessed = false)
-        const compiledNote = compileNotesForUnit(item, unitColumn, false)
-
-        const noteObj = {
-          unit: unitValue,
-          note: compiledNote,
-          ...item, // Include all original data
-        }
-
-        console.log(`Notes: Created note for unit ${unitValue}:`, noteObj)
-        return noteObj
-      })
-      .filter((note) => {
-        // Only include notes that have actual leak content (no "not accessed" messages)
-        const hasContent = note.note && note.note.trim() !== ""
-        console.log(`Notes: Filtering note for unit ${note.unit}, has content: ${hasContent}, note: "${note.note}"`)
-        return hasContent
-      })
-
-    console.log("Notes: Final processed notes:", processedNotes.length, "notes")
-
-    setEditedNotes(processedNotes)
-    localStorage.setItem("reportNotes", JSON.stringify(processedNotes))
-  }, [installationData])
+  }, [notes])
 
   // Filter out notes without valid unit numbers
   const filteredNotes = editedNotes.filter((note) => {
-    if (!note.unit || note.unit.trim() === "") {
-      return false
-    }
+    if (!note.unit || note.unit.trim() === "") return false
 
     const lowerUnit = note.unit.toLowerCase()
     const invalidValues = ["total", "sum", "average", "avg", "count", "header", "n/a", "na"]
-    if (invalidValues.some((val) => lowerUnit.includes(val))) {
-      return false
-    }
-
-    // Only include notes that have actual content (leak issues only)
-    if (!note.note || note.note.trim() === "") {
-      return false
-    }
+    if (invalidValues.some((val) => lowerUnit.includes(val))) return false
 
     return true
   })
@@ -316,7 +162,7 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
         console.log("Notes resorted on load:", sortedNotes)
       }
     }
-  }, []) // Only run once when component mounts
+  }, [notes]) // Depend on notes prop changes
 
   // Handle section title change
   const handleSectionTitleChange = (value: string) => {
@@ -381,56 +227,48 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
             </tr>
           </thead>
           <tbody>
-            {filteredNotes.length === 0 ? (
-              <tr>
-                <td colSpan={isEditable ? 3 : 2} className="py-4 px-4 text-center text-gray-500">
-                  No notes with leak issues found
-                </td>
-              </tr>
-            ) : (
-              filteredNotes.map((note, index) => {
-                const unitProp = getUnitProperty(note)
-                return (
-                  <tr key={index}>
-                    <td className="py-2 px-4 border-b">
-                      {isEditable ? (
-                        <EditableText
-                          value={note[unitProp]}
-                          onChange={(value) => handleNoteChange(index, unitProp, value)}
-                          placeholder="Unit"
-                        />
-                      ) : (
-                        note[unitProp]
-                      )}
-                    </td>
-                    <td className="py-2 px-4 border-b">
-                      {isEditable ? (
-                        <EditableText
-                          value={note.note}
-                          onChange={(value) => handleNoteChange(index, "note", value)}
-                          placeholder="Note"
-                          multiline={true}
-                        />
-                      ) : (
-                        note.note
-                      )}
-                    </td>
-                    {isEditable && (
-                      <td className="py-2 px-4 border-b">
-                        <Button
-                          onClick={() => handleDeleteNote(index)}
-                          size="sm"
-                          variant="outline"
-                          className="h-8 w-8 p-0"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </td>
+            {editedNotes.map((note, index) => {
+              const unitProp = getUnitProperty(note)
+              return (
+                <tr key={index}>
+                  <td className="py-2 px-4 border-b">
+                    {isEditable ? (
+                      <EditableText
+                        value={note[unitProp]}
+                        onChange={(value) => handleNoteChange(index, unitProp, value)}
+                        placeholder="Unit"
+                      />
+                    ) : (
+                      note[unitProp]
                     )}
-                  </tr>
-                )
-              })
-            )}
+                  </td>
+                  <td className="py-2 px-4 border-b">
+                    {isEditable ? (
+                      <EditableText
+                        value={note.note}
+                        onChange={(value) => handleNoteChange(index, "note", value)}
+                        placeholder="Note"
+                        multiline={true}
+                      />
+                    ) : (
+                      note.note
+                    )}
+                  </td>
+                  {isEditable && (
+                    <td className="py-2 px-4 border-b">
+                      <Button
+                        onClick={() => handleDeleteNote(index)}
+                        size="sm"
+                        variant="outline"
+                        className="h-8 w-8 p-0"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </td>
+                  )}
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

@@ -75,17 +75,6 @@ export default function ReportDetailPage({
 
   const unitColumn = findUnitColumn(installationData)
 
-  // Function to get the appropriate "not accessed" message based on unit column name
-  const getNotAccessedMessage = (): string => {
-    if (!unitColumn) return "Unit not accessed."
-
-    const columnLower = unitColumn.toLowerCase()
-    if (columnLower.includes("apt") || columnLower.includes("apartment")) {
-      return "Apt not accessed."
-    }
-    return "Unit not accessed."
-  }
-
   // Combine and sort all data
   const allData = [...additionalRows, ...installationData]
 
@@ -115,35 +104,6 @@ export default function ReportDetailPage({
       // Otherwise, sort alphabetically
       return finalUnitA.localeCompare(finalUnitB, undefined, { numeric: true, sensitivity: "base" })
     })
-  }
-
-  // Function to compile notes for a unit (used by both details and notes sections)
-  const compileNotesForUnit = (item: InstallationData, includeNotAccessed = true): string => {
-    // Compile notes from leak issues only
-    let notes = ""
-    if (item["Leak Issue Kitchen Faucet"]) notes += "Dripping from kitchen faucet. "
-    if (item["Leak Issue Bath Faucet"]) notes += "Dripping from bathroom faucet. "
-    if (item["Tub Spout/Diverter Leak Issue"] === "Light") notes += "Light leak from tub spout/diverter. "
-    if (item["Tub Spout/Diverter Leak Issue"] === "Moderate") notes += "Moderate leak from tub spout/diverter. "
-    if (item["Tub Spout/Diverter Leak Issue"] === "Heavy") notes += "Heavy leak from tub spout/diverter. "
-
-    // Check if unit was not accessed (all installation columns are empty)
-    const kitchenAerator = kitchenAeratorColumn ? getAeratorDescription(item[kitchenAeratorColumn], "kitchen") : ""
-    const bathroomAerator = bathroomAeratorColumn ? getAeratorDescription(item[bathroomAeratorColumn], "bathroom") : ""
-    const shower = showerHeadColumn ? getAeratorDescription(item[showerHeadColumn], "shower") : ""
-    const toilet = hasToiletInstalled(item) ? "0.8 GPF" : ""
-
-    const isUnitNotAccessed =
-      (!kitchenAerator || kitchenAerator === "No Touch.") &&
-      (!bathroomAerator || bathroomAerator === "No Touch.") &&
-      (!shower || shower === "No Touch.") &&
-      !toilet
-
-    if (isUnitNotAccessed && !notes.trim() && includeNotAccessed) {
-      notes = getNotAccessedMessage()
-    }
-
-    return formatNote(notes.trim())
   }
 
   // Filter and sort data
@@ -634,9 +594,22 @@ export default function ReportDetailPage({
               const shower = showerHeadColumn ? getAeratorDescription(item[showerHeadColumn], "shower") : ""
               const toilet = hasToiletInstalled(item) ? "0.8 GPF" : ""
 
-              // Get compiled notes (including "not accessed" for details section)
-              const compiledNotes = compileNotesForUnit(item, true)
-              const finalNote = editedNotes[unitValue] !== undefined ? editedNotes[unitValue] : compiledNotes
+              // Compile notes
+              let notes = ""
+              if (item["Leak Issue Kitchen Faucet"]) notes += "Dripping from kitchen faucet. "
+              if (item["Leak Issue Bath Faucet"]) notes += "Dripping from bathroom faucet. "
+              if (item["Tub Spout/Diverter Leak Issue"] === "Light") notes += "Light leak from tub spout/diverter. "
+              if (item["Tub Spout/Diverter Leak Issue"] === "Moderate")
+                notes += "Moderate leak from tub spout/diverter. "
+              if (item["Tub Spout/Diverter Leak Issue"] === "Heavy") notes += "Heavy leak from tub spout/diverter. "
+
+              const isUnitNotAccessed = !kitchenAerator && !bathroomAerator && !shower && !toilet
+              if (isUnitNotAccessed && !notes) {
+                notes = "Unit not accessed."
+              }
+
+              notes = formatNote(notes)
+              const finalNote = editedNotes[unitValue] !== undefined ? editedNotes[unitValue] : notes.trim()
 
               return (
                 <tr key={index}>
@@ -820,8 +793,21 @@ export default function ReportDetailPage({
                   const shower = showerHeadColumn ? getAeratorDescription(item[showerHeadColumn], "shower") : ""
                   const toilet = hasToiletInstalled(item) ? "0.8 GPF" : ""
 
-                  const compiledNotes = compileNotesForUnit(item, true)
-                  const finalNote = editedNotes[unitValue] !== undefined ? editedNotes[unitValue] : compiledNotes
+                  let notes = ""
+                  if (item["Leak Issue Kitchen Faucet"]) notes += "Dripping from kitchen faucet. "
+                  if (item["Leak Issue Bath Faucet"]) notes += "Dripping from bathroom faucet. "
+                  if (item["Tub Spout/Diverter Leak Issue"] === "Light") notes += "Light leak from tub spout/diverter. "
+                  if (item["Tub Spout/Diverter Leak Issue"] === "Moderate")
+                    notes += "Moderate leak from tub spout/diverter. "
+                  if (item["Tub Spout/Diverter Leak Issue"] === "Heavy") notes += "Heavy leak from tub spout/diverter. "
+
+                  const isUnitNotAccessed = !kitchenAerator && !bathroomAerator && !shower && !toilet
+                  if (isUnitNotAccessed && !notes) {
+                    notes = "Unit not accessed."
+                  }
+
+                  notes = formatNote(notes)
+                  const finalNote = editedNotes[unitValue] !== undefined ? editedNotes[unitValue] : notes.trim()
 
                   return (
                     <tr key={index}>
