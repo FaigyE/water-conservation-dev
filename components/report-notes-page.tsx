@@ -127,12 +127,47 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
   const compileNotesForUnit = (item: any, unitColumn: string | null, includeNotAccessed = false): string => {
     // Compile notes from leak issues only
     let notes = ""
+    let noteText = ""
+
+    // Handle kitchen faucet leaks with severity
     if (item["Leak Issue Kitchen Faucet"]) {
-      notes += "Dripping from kitchen faucet. "
+      const leakValue = item["Leak Issue Kitchen Faucet"].trim()
+      const lowerLeakValue = leakValue.toLowerCase()
+
+      if (lowerLeakValue === "light") {
+        noteText += "Light leak from kitchen faucet. "
+      } else if (lowerLeakValue === "moderate") {
+        noteText += "Moderate leak from kitchen faucet. "
+      } else if (lowerLeakValue === "heavy") {
+        noteText += "Heavy leak from kitchen faucet. "
+      } else if (lowerLeakValue === "dripping" || lowerLeakValue === "driping") {
+        noteText += "Dripping from kitchen faucet. "
+      } else {
+        // For any other non-empty value, show "leak from kitchen faucet"
+        noteText += "Leak from kitchen faucet. "
+      }
     }
+
+    // Handle bathroom faucet leaks with severity
     if (item["Leak Issue Bath Faucet"]) {
-      notes += "Dripping from bathroom faucet. "
+      const leakValue = item["Leak Issue Bath Faucet"].trim()
+      const lowerLeakValue = leakValue.toLowerCase()
+
+      if (lowerLeakValue === "light") {
+        noteText += "Light leak from bathroom faucet. "
+      } else if (lowerLeakValue === "moderate") {
+        noteText += "Moderate leak from bathroom faucet. "
+      } else if (lowerLeakValue === "heavy") {
+        noteText += "Heavy leak from bathroom faucet. "
+      } else if (lowerLeakValue === "dripping" || lowerLeakValue === "driping") {
+        noteText += "Dripping from bathroom faucet. "
+      } else {
+        // For any other non-empty value, show "leak from bathroom faucet"
+        noteText += "Leak from bathroom faucet. "
+      }
     }
+
+    // Handle tub spout/diverter leaks with severity
     if (item["Tub Spout/Diverter Leak Issue"]) {
       const leakValue = item["Tub Spout/Diverter Leak Issue"]
       if (leakValue === "Light") {
@@ -149,7 +184,7 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
 
     // For notes section, do NOT include "not accessed" messages
     // Only return leak-related notes
-    return formatNote(notes.trim())
+    return formatNote(noteText + notes.trim())
   }
 
   // Initialize editedNotes using installation data (same as details page)

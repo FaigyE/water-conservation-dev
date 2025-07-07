@@ -117,12 +117,94 @@ export default function ReportDetailPage({
     })
   }
 
+  const findColumnName = (possibleNames: string[]): string | null => {
+    if (!installationData || installationData.length === 0) return null
+    const item = installationData[0]
+
+    for (const key of Object.keys(item)) {
+      if (possibleNames.includes(key)) {
+        return key
+      }
+    }
+
+    for (const key of Object.keys(item)) {
+      for (const possibleName of possibleNames) {
+        if (key.toLowerCase() === possibleName.toLowerCase()) {
+          return key
+        }
+      }
+    }
+
+    return null
+  }
+
+  const kitchenAeratorColumn = findColumnName(["Kitchen Aerator", "kitchen aerator", "kitchen", "kitchen aerators"])
+  const bathroomAeratorColumn = findColumnName([
+    "Bathroom aerator",
+    "bathroom aerator",
+    "bathroom",
+    "bathroom aerators",
+    "bath aerator",
+  ])
+  const showerHeadColumn = findColumnName(["Shower Head", "shower head", "shower", "shower heads"])
+
+  // Helper functions - moved before they're used
+  const getToiletColumnInfo = (item: InstallationData): { installed: boolean; columnName: string | null } => {
+    const toiletColumn = Object.keys(item).find((key) => key.startsWith("Toilets Installed:"))
+    if (toiletColumn && item[toiletColumn] && item[toiletColumn] !== "") {
+      return { installed: true, columnName: toiletColumn }
+    }
+    return { installed: false, columnName: null }
+  }
+
+  const hasToiletInstalled = (item: InstallationData): boolean => {
+    return getToiletColumnInfo(item).installed
+  }
+
   // Function to compile notes for a unit (used by both details and notes sections)
   const compileNotesForUnit = (item: InstallationData, includeNotAccessed = true): string => {
     // Compile notes from leak issues only
     let notes = ""
-    if (item["Leak Issue Kitchen Faucet"]) notes += "Dripping from kitchen faucet. "
-    if (item["Leak Issue Bath Faucet"]) notes += "Dripping from bathroom faucet. "
+
+    // Handle kitchen faucet leaks with severity
+    if (item["Leak Issue Kitchen Faucet"]) {
+      const leakValue = item["Leak Issue Kitchen Faucet"].trim()
+      const lowerLeakValue = leakValue.toLowerCase()
+
+      if (lowerLeakValue === "light") {
+        notes += "Light leak from kitchen faucet. "
+      } else if (lowerLeakValue === "moderate") {
+        notes += "Moderate leak from kitchen faucet. "
+      } else if (lowerLeakValue === "heavy") {
+        notes += "Heavy leak from kitchen faucet. "
+      } else if (lowerLeakValue === "dripping" || lowerLeakValue === "driping") {
+        notes += "Dripping from kitchen faucet. "
+      } else {
+        // For any other non-empty value, show "leak from kitchen faucet"
+        notes += "Leak from kitchen faucet. "
+      }
+    }
+
+    // Handle bathroom faucet leaks with severity
+    if (item["Leak Issue Bath Faucet"]) {
+      const leakValue = item["Leak Issue Bath Faucet"].trim()
+      const lowerLeakValue = leakValue.toLowerCase()
+
+      if (lowerLeakValue === "light") {
+        notes += "Light leak from bathroom faucet. "
+      } else if (lowerLeakValue === "moderate") {
+        notes += "Moderate leak from bathroom faucet. "
+      } else if (lowerLeakValue === "heavy") {
+        notes += "Heavy leak from bathroom faucet. "
+      } else if (lowerLeakValue === "dripping" || lowerLeakValue === "driping") {
+        notes += "Dripping from bathroom faucet. "
+      } else {
+        // For any other non-empty value, show "leak from bathroom faucet"
+        notes += "Leak from bathroom faucet. "
+      }
+    }
+
+    // Handle tub spout/diverter leaks with severity
     if (item["Tub Spout/Diverter Leak Issue"]) {
       const leakValue = item["Tub Spout/Diverter Leak Issue"]
       if (leakValue === "Light") {
@@ -174,24 +256,22 @@ export default function ReportDetailPage({
         `Detail page Row ${i + 1}: Unit="${unitValue}" (type: ${typeof unitValue}, isAdditional: ${isAdditionalRow})`,
       )
 
-      // For original data, stop at first empty unit
-      if (!isAdditionalRow) {
-        if (
-          unitValue === undefined ||
-          unitValue === null ||
-          unitValue === "" ||
-          (typeof unitValue === "string" && unitValue.trim() === "")
-        ) {
-          console.log(`Detail page STOPPING: Found empty unit at row ${i + 1}. Processed ${result.length} valid rows.`)
-          break
-        }
-      }
-
       // For additional rows, include them even if unit is empty (they can be edited)
       if (isAdditionalRow) {
         console.log(`Detail page: Adding additional row ${i + 1}`)
         result.push(item)
         continue
+      }
+
+      // For original data, stop at first empty unit
+      if (
+        unitValue === undefined ||
+        unitValue === null ||
+        unitValue === "" ||
+        (typeof unitValue === "string" && unitValue.trim() === "")
+      ) {
+        console.log(`Detail page STOPPING: Found empty unit at row ${i + 1}. Processed ${result.length} valid rows.`)
+        break // Stop processing immediately when we find an empty unit
       }
 
       // Convert to string and trim for further checks (original data only)
@@ -208,11 +288,26 @@ export default function ReportDetailPage({
         continue
       }
 
-      // Filter out invalid values for original data
+      // Filter out invalid values for original data - but be more specific
       const lowerUnit = trimmedUnit.toLowerCase()
-      const invalidValues = ["total", "sum", "average", "avg", "count", "header", "n/a", "na"]
-      if (invalidValues.some((val) => lowerUnit.includes(val))) {
-        console.log(`Detail page: Skipping invalid unit "${trimmedUnit}"`)
+      const invalidValues = ["total", "sum", "average", "avg", "count", "header", "grand total", "subtotal"]
+
+      // Check if the entire unit value matches invalid patterns
+      const isInvalidUnit = invalidValues.some((val) => lowerUnit === val || lowerUnit.includes(val))
+
+      // Also check if this looks like a summary row by examining other columns
+      const hasInstallationData =
+        (kitchenAeratorColumn && item[kitchenAeratorColumn] && item[kitchenAeratorColumn] !== "") ||
+        (bathroomAeratorColumn && item[bathroomAeratorColumn] && item[bathroomAeratorColumn] !== "") ||
+        (showerHeadColumn && item[showerHeadColumn] && item[showerHeadColumn] !== "") ||
+        hasToiletInstalled(item)
+
+      const hasLeakData =
+        item["Leak Issue Kitchen Faucet"] || item["Leak Issue Bath Faucet"] || item["Tub Spout/Diverter Leak Issue"]
+
+      // Only skip if it's clearly an invalid unit AND has no relevant data
+      if (isInvalidUnit && !hasInstallationData && !hasLeakData) {
+        console.log(`Detail page: Skipping invalid unit "${trimmedUnit}" (no installation or leak data)`)
         continue
       }
 
@@ -237,50 +332,6 @@ export default function ReportDetailPage({
   for (let i = 0; i < filteredData.length; i += itemsPerPage) {
     dataPages.push(filteredData.slice(i, i + itemsPerPage))
   }
-
-  // Helper functions
-  const getToiletColumnInfo = (item: InstallationData): { installed: boolean; columnName: string | null } => {
-    const toiletColumn = Object.keys(item).find((key) => key.startsWith("Toilets Installed:"))
-    if (toiletColumn && item[toiletColumn] && item[toiletColumn] !== "") {
-      return { installed: true, columnName: toiletColumn }
-    }
-    return { installed: false, columnName: null }
-  }
-
-  const hasToiletInstalled = (item: InstallationData): boolean => {
-    return getToiletColumnInfo(item).installed
-  }
-
-  const findColumnName = (possibleNames: string[]): string | null => {
-    if (!filteredData || filteredData.length === 0) return null
-    const item = filteredData[0]
-
-    for (const key of Object.keys(item)) {
-      if (possibleNames.includes(key)) {
-        return key
-      }
-    }
-
-    for (const key of Object.keys(item)) {
-      for (const possibleName of possibleNames) {
-        if (key.toLowerCase() === possibleName.toLowerCase()) {
-          return key
-        }
-      }
-    }
-
-    return null
-  }
-
-  const kitchenAeratorColumn = findColumnName(["Kitchen Aerator", "kitchen aerator", "kitchen", "kitchen aerators"])
-  const bathroomAeratorColumn = findColumnName([
-    "Bathroom aerator",
-    "bathroom aerator",
-    "bathroom",
-    "bathroom aerators",
-    "bath aerator",
-  ])
-  const showerHeadColumn = findColumnName(["Shower Head", "shower head", "shower", "shower heads"])
 
   // Check what columns to show
   const hasKitchenAeratorData = kitchenAeratorColumn && filteredData.some((item) => item[kitchenAeratorColumn])

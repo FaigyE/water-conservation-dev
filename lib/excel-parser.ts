@@ -143,19 +143,23 @@ export async function parseExcelFile(file: File): Promise<InstallationData[]> {
                   continue // Skip this row but continue processing
                 }
 
-                // Also check if this looks like a total row by examining all values in the row
-                const rowValues = Object.values(row).map((v) =>
-                  String(v || "")
+                // Also check if this looks like a total row by examining only the first 5 values in the row
+                const allKeys = Object.keys(row)
+                const first5Keys = allKeys.slice(0, 5)
+                const first5Values = first5Keys.map((key) =>
+                  String(row[key] || "")
                     .toLowerCase()
                     .trim(),
                 )
-                const containsTotalKeyword = rowValues.some((v) => invalidValues.some((invalid) => v.includes(invalid)))
+                const containsTotalKeyword = first5Values.some((v) =>
+                  invalidValues.some((invalid) => v.includes(invalid)),
+                )
 
                 if (containsTotalKeyword) {
                   console.log(
-                    `Excel->CSV: Skipping total row "${trimmedUnit}" at row ${i + 1} (row contains total keywords)`,
+                    `Excel->CSV: Skipping total row "${trimmedUnit}" at row ${i + 1} (first 5 columns contain total keywords)`,
                   )
-                  console.log(`Excel->CSV: Row values:`, rowValues)
+                  console.log(`Excel->CSV: First 5 column values:`, first5Values)
                   continue // Skip this row but continue processing
                 }
 

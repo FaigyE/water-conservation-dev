@@ -538,12 +538,38 @@ export default function EnhancedPdfButton({
             continue
           }
 
-          // Filter out rows with non-apartment values (often headers, totals, etc.) but continue processing
+          // Filter out rows with non-apartment values (often headers, totals, etc.) but be more specific
           const lowerUnit = trimmedUnit.toLowerCase()
-          const invalidValues = ["total", "sum", "average", "avg", "count", "header", "n/a", "na"]
-          if (invalidValues.some((val) => lowerUnit.includes(val))) {
+          const invalidValues = [
+            "total",
+            "sum",
+            "average",
+            "avg",
+            "count",
+            "header",
+            "n/a",
+            "na",
+            "grand total",
+            "subtotal",
+          ]
+
+          // Check if the entire unit value matches invalid patterns
+          const isInvalidUnit = invalidValues.some((val) => lowerUnit === val || lowerUnit.includes(val))
+
+          // Also check if this looks like a summary row by examining other columns
+          const hasInstallationData =
+            (kitchenAeratorColumn && item[kitchenAeratorColumn] && item[kitchenAeratorColumn] !== "") ||
+            (bathroomAeratorColumn && item[bathroomAeratorColumn] && item[bathroomAeratorColumn] !== "") ||
+            (showerHeadColumn && item[showerHeadColumn] && item[showerHeadColumn] !== "") ||
+            hasToiletInstalled(item)
+
+          const hasLeakData =
+            item["Leak Issue Kitchen Faucet"] || item["Leak Issue Bath Faucet"] || item["Tub Spout/Diverter Leak Issue"]
+
+          // Only skip if it's clearly an invalid unit AND has no relevant data
+          if (isInvalidUnit && !hasInstallationData && !hasLeakData) {
             console.log(
-              `PDF: Skipping invalid unit "${trimmedUnit}" at row ${i + 1} (contains: ${invalidValues.find((val) => lowerUnit.includes(val))})`,
+              `PDF: Skipping invalid unit "${trimmedUnit}" at row ${i + 1} (contains: ${invalidValues.find((val) => lowerUnit.includes(val))} and no relevant data)`,
             )
             continue // Skip this row but continue processing
           }
@@ -1096,8 +1122,46 @@ export default function EnhancedPdfButton({
           // Update the notes compilation in the PDF generation
           // Compile notes with proper sentence case - only include leak issues
           let noteText = ""
-          if (item["Leak Issue Kitchen Faucet"]) noteText += "Dripping from kitchen faucet. "
-          if (item["Leak Issue Bath Faucet"]) noteText += "Dripping from bathroom faucet. "
+
+          // Handle kitchen faucet leaks with severity
+          if (item["Leak Issue Kitchen Faucet"]) {
+            const leakValue = item["Leak Issue Kitchen Faucet"].trim()
+            const lowerLeakValue = leakValue.toLowerCase()
+
+            if (lowerLeakValue === "light") {
+              noteText += "Light leak from kitchen faucet. "
+            } else if (lowerLeakValue === "moderate") {
+              noteText += "Moderate leak from kitchen faucet. "
+            } else if (lowerLeakValue === "heavy") {
+              noteText += "Heavy leak from kitchen faucet. "
+            } else if (lowerLeakValue === "dripping" || lowerLeakValue === "driping") {
+              noteText += "Dripping from kitchen faucet. "
+            } else {
+              // For any other non-empty value, show "leak from kitchen faucet"
+              noteText += "Leak from kitchen faucet. "
+            }
+          }
+
+          // Handle bathroom faucet leaks with severity
+          if (item["Leak Issue Bath Faucet"]) {
+            const leakValue = item["Leak Issue Bath Faucet"].trim()
+            const lowerLeakValue = leakValue.toLowerCase()
+
+            if (lowerLeakValue === "light") {
+              noteText += "Light leak from bathroom faucet. "
+            } else if (lowerLeakValue === "moderate") {
+              noteText += "Moderate leak from bathroom faucet. "
+            } else if (lowerLeakValue === "heavy") {
+              noteText += "Heavy leak from bathroom faucet. "
+            } else if (lowerLeakValue === "dripping" || lowerLeakValue === "driping") {
+              noteText += "Dripping from bathroom faucet. "
+            } else {
+              // For any other non-empty value, show "leak from bathroom faucet"
+              noteText += "Leak from bathroom faucet. "
+            }
+          }
+
+          // Handle tub spout/diverter leaks with severity
           if (item["Tub Spout/Diverter Leak Issue"]) {
             const leakValue = item["Tub Spout/Diverter Leak Issue"]
             if (leakValue === "Light") {
