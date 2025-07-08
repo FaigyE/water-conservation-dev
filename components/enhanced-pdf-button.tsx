@@ -214,94 +214,95 @@ export default function EnhancedPdfButton({
     return getToiletColumnInfo(item).installed
   }
 
-  // Find the actual column names in the data
-  // Replace the findColumnName function with this improved version
+  // Updated findColumnName function to prioritize columns with data - same as detail page
   const findColumnName = (possibleNames: string[]): string | null => {
     if (!installationData || installationData.length === 0) return null
 
-    // Debug all column names in the data
-    console.log("PDF: All column names in data:", Object.keys(installationData[0]))
+    console.log("PDF: Looking for columns:", possibleNames)
+    console.log("PDF: Available columns:", Object.keys(installationData[0]))
 
-    const item = installationData[0]
+    // First, find all matching columns (both exact and partial matches)
+    const matchingColumns: { key: string; hasData: boolean; dataCount: number; sampleValues: string[] }[] = []
 
-    // First try exact match
-    for (const key of Object.keys(item)) {
+    for (const key of Object.keys(installationData[0])) {
+      let isMatch = false
+
+      // Check for exact match
       if (possibleNames.includes(key)) {
-        console.log(`PDF: Found exact match for column: ${key}`)
-        return key
+        isMatch = true
       }
-    }
 
-    // Then try case-insensitive match
-    for (const key of Object.keys(item)) {
-      for (const possibleName of possibleNames) {
-        if (key.toLowerCase() === possibleName.toLowerCase()) {
-          console.log(`PDF: Found case-insensitive match for column: ${key} (searched for: ${possibleName})`)
-          return key
-        }
-      }
-    }
-
-    // Then try partial match with both key and possibleName variations
-    for (const key of Object.keys(item)) {
-      for (const possibleName of possibleNames) {
-        // Check if key contains possibleName or possibleName contains key
-        if (
-          key.toLowerCase().includes(possibleName.toLowerCase()) ||
-          possibleName.toLowerCase().includes(key.toLowerCase())
-        ) {
-          console.log(`PDF: Found partial match for column: ${key} (searched for: ${possibleName})`)
-          return key
-        }
-      }
-    }
-
-    // Try to find by common patterns
-    const keywordMap = {
-      kitchen: ["kitchen", "kitch", "kit"],
-      bathroom: ["bathroom", "bath", "lav", "lavatory"],
-      shower: ["shower", "shwr"],
-    }
-
-    for (const key of Object.keys(item)) {
-      const keyLower = key.toLowerCase()
-
-      // Check for kitchen aerator
-      if (possibleNames.some((name) => name.toLowerCase().includes("kitchen"))) {
-        if (
-          keywordMap.kitchen.some((keyword) => keyLower.includes(keyword)) &&
-          (keyLower.includes("aer") || keyLower.includes("faucet"))
-        ) {
-          console.log(`PDF: Found keyword match for kitchen column: ${key}`)
-          return key
+      // Check for case-insensitive match
+      if (!isMatch) {
+        for (const possibleName of possibleNames) {
+          if (key.toLowerCase() === possibleName.toLowerCase()) {
+            isMatch = true
+            break
+          }
         }
       }
 
-      // Check for bathroom aerator
-      if (possibleNames.some((name) => name.toLowerCase().includes("bathroom"))) {
-        if (
-          keywordMap.bathroom.some((keyword) => keyLower.includes(keyword)) &&
-          (keyLower.includes("aer") || keyLower.includes("faucet"))
-        ) {
-          console.log(`PDF: Found keyword match for bathroom column: ${key}`)
-          return key
+      // Check for partial match
+      if (!isMatch) {
+        for (const possibleName of possibleNames) {
+          if (
+            key.toLowerCase().includes(possibleName.toLowerCase()) ||
+            possibleName.toLowerCase().includes(key.toLowerCase())
+          ) {
+            isMatch = true
+            break
+          }
         }
       }
 
-      // Check for shower head
-      if (possibleNames.some((name) => name.toLowerCase().includes("shower"))) {
-        if (
-          keywordMap.shower.some((keyword) => keyLower.includes(keyword)) &&
-          (keyLower.includes("head") || keyLower.includes("hd"))
-        ) {
-          console.log(`PDF: Found keyword match for shower column: ${key}`)
-          return key
-        }
+      if (isMatch) {
+        // Count how many rows have meaningful data in this column
+        const meaningfulValues = installationData
+          .map((item) => item[key])
+          .filter((value) => {
+            if (!value) return false
+            const trimmed = String(value).trim().toLowerCase()
+            // Consider it meaningful if it's not empty, not "0", not "no", not "n/a", not "na"
+            return (
+              trimmed !== "" &&
+              trimmed !== "0" &&
+              trimmed !== "no" &&
+              trimmed !== "n/a" &&
+              trimmed !== "na" &&
+              trimmed !== "none"
+            )
+          })
+
+        const dataCount = meaningfulValues.length
+        const sampleValues = meaningfulValues.slice(0, 5).map((v) => String(v)) // Get first 5 sample values
+
+        matchingColumns.push({
+          key,
+          hasData: dataCount > 0,
+          dataCount,
+          sampleValues,
+        })
+
+        console.log(
+          `PDF: Found matching column "${key}" with ${dataCount} meaningful data entries. Sample values:`,
+          sampleValues,
+        )
       }
     }
 
-    console.log(`PDF: No match found for columns: ${possibleNames.join(", ")}`)
-    return null
+    if (matchingColumns.length === 0) {
+      console.log("PDF: No matching columns found")
+      return null
+    }
+
+    // Sort by data count (descending) to prioritize columns with more meaningful data
+    matchingColumns.sort((a, b) => b.dataCount - a.dataCount)
+
+    const selectedColumn = matchingColumns[0].key
+    console.log(`PDF: Selected column "${selectedColumn}" with ${matchingColumns[0].dataCount} meaningful data entries`)
+    console.log(`PDF: Sample values from selected column:`, matchingColumns[0].sampleValues)
+
+    return selectedColumn
   }
 
   const handleGeneratePdf = async () => {
@@ -366,6 +367,27 @@ export default function EnhancedPdfButton({
         rePrefix,
         dearPrefix,
         sectionTitles,
+      })
+
+      // Find the unit column first
+      const unitColumn = findUnitColumn(installationData)
+      console.log("PDF: Using unit column:", unitColumn)
+
+      // Get the actual column names from the data - MOVE THIS TO THE TOP
+      const kitchenAeratorColumn = findColumnName(["Kitchen Aerator", "kitchen aerator", "kitchen", "kitchen aerators"])
+      const bathroomAeratorColumn = findColumnName([
+        "Bathroom aerator",
+        "bathroom aerator",
+        "bathroom",
+        "bathroom aerators",
+        "bath aerator",
+      ])
+      const showerHeadColumn = findColumnName(["Shower Head", "shower head", "shower", "shower heads"])
+
+      console.log("PDF: Found column names:", {
+        kitchenAeratorColumn,
+        bathroomAeratorColumn,
+        showerHeadColumn,
       })
 
       // Load the latest edited units from localStorage right before generating the PDF
@@ -459,37 +481,6 @@ export default function EnhancedPdfButton({
         latestReportNotes = [...notes]
       }
 
-      // Also load the latest notes from the context to ensure we have the most recent changes
-      // const contextNotes = useReportContext().notes // Moved to top level
-      // let contextNotes = useReportContext().notes
-      // if (contextNotes && contextNotes.length > 0) {
-      //   console.log("PDF: Context notes available:", contextNotes)
-      //   // Use context notes if they're more recent (have more items or different content)
-      //   if (contextNotes.length >= latestReportNotes.length) {
-      //     latestReportNotes = [...contextNotes].sort((a, b) => {
-      //       const unitA = a.unit || ""
-      //       const unitB = b.unit || ""
-
-      //       // Try to parse as numbers first
-      //       const numA = Number.parseInt(unitA)
-      //       const numB = Number.parseInt(unitB)
-
-      //       // If both are valid numbers, sort numerically
-      //       if (!isNaN(numA) && !isNaN(numB)) {
-      //         return numA - numB
-      //       }
-
-      //       // Otherwise, sort alphabetically
-      //       return unitA.localeCompare(unitB, undefined, { numeric: true, sensitivity: "base" })
-      //     })
-      //     console.log("PDF: Using context notes instead:", latestReportNotes)
-      //   }
-      // }
-
-      // Now find the unit column
-      const unitColumn = findUnitColumn(installationData)
-      console.log("PDF: Using unit column:", unitColumn)
-
       // Filter out rows without valid unit numbers and apply edits
       const filteredData = (() => {
         const result = []
@@ -547,8 +538,7 @@ export default function EnhancedPdfButton({
             "avg",
             "count",
             "header",
-            "n/a",
-            "na",
+
             "grand total",
             "subtotal",
           ]
@@ -903,23 +893,6 @@ export default function EnhancedPdfButton({
 
       // Detail Pages
       let currentPage = 3 + (filteredNotes.length > 0 ? Math.ceil(filteredNotes.length / estimatedNotesPerPage) : 0)
-
-      // Get the actual column names from the data
-      const kitchenAeratorColumn = findColumnName(["Kitchen Aerator", "kitchen aerator", "kitchen", "kitchen aerators"])
-      const bathroomAeratorColumn = findColumnName([
-        "Bathroom aerator",
-        "bathroom aerator",
-        "bathroom",
-        "bathroom aerators",
-        "bath aerator",
-      ])
-      const showerHeadColumn = findColumnName(["Shower Head", "shower head", "shower", "shower heads"])
-
-      console.log("PDF: Found column names:", {
-        kitchenAeratorColumn,
-        bathroomAeratorColumn,
-        showerHeadColumn,
-      })
 
       // Debug the data to see what's in the aerator columns
       console.log(

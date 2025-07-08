@@ -126,8 +126,6 @@ export async function parseExcelFile(file: File): Promise<InstallationData[]> {
                   "avg",
                   "count",
                   "header",
-                  "n/a",
-                  "na",
                   "grand total",
                   "subtotal",
                   "summary",

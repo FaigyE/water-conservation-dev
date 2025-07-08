@@ -178,7 +178,7 @@ function ReportContent() {
               noteText += "Moderate leak from tub spout/diverter. "
             if (item["Tub Spout/Diverter Leak Issue"] === "Heavy") noteText += "Heavy leak from tub spout/ diverter. "
 
-            // Add custom notes from CSV preview
+            // Add custom notes from CSV preview (this includes selected cells and columns)
             if (item.Notes && item.Notes.trim() !== "") {
               noteText += item.Notes + " "
             }
@@ -190,6 +190,7 @@ function ReportContent() {
           })
           .filter((note: Note) => note.note !== "") // Remove notes that are empty after filtering
 
+        console.log("Report: Generated notes from installation data:", notes)
         setReportNotes(notes)
       }
     } catch (error) {

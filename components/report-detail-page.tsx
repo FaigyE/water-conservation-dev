@@ -117,25 +117,152 @@ export default function ReportDetailPage({
     })
   }
 
+  // Updated findColumnName function to better detect columns with actual data
   const findColumnName = (possibleNames: string[]): string | null => {
     if (!installationData || installationData.length === 0) return null
-    const item = installationData[0]
 
-    for (const key of Object.keys(item)) {
+    console.log("Detail: Looking for columns:", possibleNames)
+    console.log("Detail: Available columns:", Object.keys(installationData[0]))
+
+    // First, find all matching columns (both exact and partial matches)
+    const matchingColumns: { key: string; hasData: boolean; dataCount: number; sampleValues: string[] }[] = []
+
+    for (const key of Object.keys(installationData[0])) {
+      let isMatch = false
+
+      // Check for exact match
       if (possibleNames.includes(key)) {
-        return key
+        isMatch = true
+      }
+
+      // Check for case-insensitive match
+      if (!isMatch) {
+        for (const possibleName of possibleNames) {
+          if (key.toLowerCase() === possibleName.toLowerCase()) {
+            isMatch = true
+            break
+          }
+        }
+      }
+
+      // Check for partial match
+      if (!isMatch) {
+        for (const possibleName of possibleNames) {
+          if (
+            key.toLowerCase().includes(possibleName.toLowerCase()) ||
+            possibleName.toLowerCase().includes(key.toLowerCase())
+          ) {
+            isMatch = true
+            break
+          }
+        }
+      }
+
+      if (isMatch) {
+        // Count how many rows have meaningful data in this column
+        const meaningfulValues = installationData
+          .map((item) => item[key])
+          .filter((value) => {
+            if (!value) return false
+            const trimmed = String(value).trim().toLowerCase()
+            // Consider it meaningful if it's not empty, not "0", not "no", not "n/a", not "na"
+            return (
+              trimmed !== "" &&
+              trimmed !== "0" &&
+              trimmed !== "no" &&
+              trimmed !== "n/a" &&
+              trimmed !== "na" &&
+              trimmed !== "none"
+            )
+          })
+
+        const dataCount = meaningfulValues.length
+        const sampleValues = meaningfulValues.slice(0, 5).map((v) => String(v)) // Get first 5 sample values
+
+        matchingColumns.push({
+          key,
+          hasData: dataCount > 0,
+          dataCount,
+          sampleValues,
+        })
+
+        console.log(
+          `Detail: Found matching column "${key}" with ${dataCount} meaningful data entries. Sample values:`,
+          sampleValues,
+        )
       }
     }
 
-    for (const key of Object.keys(item)) {
-      for (const possibleName of possibleNames) {
-        if (key.toLowerCase() === possibleName.toLowerCase()) {
-          return key
+    if (matchingColumns.length === 0) {
+      console.log("Detail: No matching columns found")
+      return null
+    }
+
+    // Sort by data count (descending) to prioritize columns with more meaningful data
+    matchingColumns.sort((a, b) => b.dataCount - a.dataCount)
+
+    const selectedColumn = matchingColumns[0].key
+    console.log(
+      `Detail: Selected column "${selectedColumn}" with ${matchingColumns[0].dataCount} meaningful data entries`,
+    )
+    console.log(`Detail: Sample values from selected column:`, matchingColumns[0].sampleValues)
+
+    return selectedColumn
+  }
+
+  // Function to find all shower-related columns
+  const findAllShowerColumns = (): string[] => {
+    if (!installationData || installationData.length === 0) return []
+
+    const showerColumns: string[] = []
+    const showerKeywords = ["shower", "shwr"]
+
+    for (const key of Object.keys(installationData[0])) {
+      const keyLower = key.toLowerCase()
+
+      // Check if this column contains shower-related keywords
+      if (showerKeywords.some((keyword) => keyLower.includes(keyword))) {
+        // Also check if it has meaningful data
+        const meaningfulDataCount = installationData.filter((item) => {
+          const value = item[key]
+          if (!value) return false
+          const trimmed = String(value).trim().toLowerCase()
+          return (
+            trimmed !== "" &&
+            trimmed !== "0" &&
+            trimmed !== "no" &&
+            trimmed !== "n/a" &&
+            trimmed !== "na" &&
+            trimmed !== "none"
+          )
+        }).length
+
+        if (meaningfulDataCount > 0) {
+          showerColumns.push(key)
+          console.log(`Detail: Found shower column "${key}" with ${meaningfulDataCount} data entries`)
         }
       }
     }
 
-    return null
+    console.log("Detail: All shower columns found:", showerColumns)
+    return showerColumns
+  }
+
+  // Function to get shower value from any shower column for a specific item
+  const getShowerValue = (item: InstallationData): string => {
+    const showerColumns = findAllShowerColumns()
+
+    for (const column of showerColumns) {
+      const value = item[column]
+      if (value && String(value).trim() !== "" && String(value).trim() !== "0") {
+        console.log(
+          `Detail: Found shower value "${value}" in column "${column}" for unit ${unitColumn ? item[unitColumn] : item.Unit}`,
+        )
+        return getAeratorDescription(value, "shower")
+      }
+    }
+
+    return "No Touch."
   }
 
   const kitchenAeratorColumn = findColumnName(["Kitchen Aerator", "kitchen aerator", "kitchen", "kitchen aerators"])
@@ -147,6 +274,12 @@ export default function ReportDetailPage({
     "bath aerator",
   ])
   const showerHeadColumn = findColumnName(["Shower Head", "shower head", "shower", "shower heads"])
+
+  console.log("Detail: Final column selections:", {
+    kitchenAeratorColumn,
+    bathroomAeratorColumn,
+    showerHeadColumn,
+  })
 
   // Helper functions - moved before they're used
   const getToiletColumnInfo = (item: InstallationData): { installed: boolean; columnName: string | null } => {
@@ -222,7 +355,7 @@ export default function ReportDetailPage({
     // Check if unit was not accessed (all installation columns are empty)
     const kitchenAerator = kitchenAeratorColumn ? getAeratorDescription(item[kitchenAeratorColumn], "kitchen") : ""
     const bathroomAerator = bathroomAeratorColumn ? getAeratorDescription(item[bathroomAeratorColumn], "bathroom") : ""
-    const shower = showerHeadColumn ? getAeratorDescription(item[showerHeadColumn], "shower") : ""
+    const shower = getShowerValue(item) // Use the new function that checks all shower columns
     const toilet = hasToiletInstalled(item) ? "0.8 GPF" : ""
 
     const isUnitNotAccessed =
@@ -299,7 +432,7 @@ export default function ReportDetailPage({
       const hasInstallationData =
         (kitchenAeratorColumn && item[kitchenAeratorColumn] && item[kitchenAeratorColumn] !== "") ||
         (bathroomAeratorColumn && item[bathroomAeratorColumn] && item[bathroomAeratorColumn] !== "") ||
-        (showerHeadColumn && item[showerHeadColumn] && item[showerHeadColumn] !== "") ||
+        getShowerValue(item) !== "No Touch." || // Use the new function
         hasToiletInstalled(item)
 
       const hasLeakData =
@@ -333,16 +466,43 @@ export default function ReportDetailPage({
     dataPages.push(filteredData.slice(i, i + itemsPerPage))
   }
 
-  // Check what columns to show
-  const hasKitchenAeratorData = kitchenAeratorColumn && filteredData.some((item) => item[kitchenAeratorColumn])
-  const hasBathroomAeratorData = bathroomAeratorColumn && filteredData.some((item) => item[bathroomAeratorColumn])
-  const hasShowerData = showerHeadColumn && filteredData.some((item) => item[showerHeadColumn])
+  // Check what columns to show - updated logic
+  const hasKitchenAeratorData =
+    kitchenAeratorColumn &&
+    filteredData.some((item) => {
+      const value = item[kitchenAeratorColumn]
+      return value !== undefined && value !== null && value !== "" && value.trim() !== ""
+    })
+
+  const hasBathroomAeratorData =
+    bathroomAeratorColumn &&
+    filteredData.some((item) => {
+      const value = item[bathroomAeratorColumn]
+      return value !== undefined && value !== null && value !== "" && value.trim() !== ""
+    })
+
+  // Updated shower data check to use the new function
+  const hasShowerData = filteredData.some((item) => {
+    const showerValue = getShowerValue(item)
+    return showerValue !== "No Touch."
+  })
 
   const hasKitchenAerators = Boolean(hasKitchenAeratorData) || additionalRows.length > 0
   const hasBathroomAerators = Boolean(hasBathroomAeratorData) || additionalRows.length > 0
   const hasShowers = Boolean(hasShowerData) || additionalRows.length > 0
   const hasToilets = filteredData.some((item) => hasToiletInstalled(item)) || additionalRows.length > 0
   const hasNotes = true // Always show notes column
+
+  console.log("Detail: Column visibility:", {
+    hasKitchenAeratorData,
+    hasKitchenAerators,
+    hasBathroomAeratorData,
+    hasBathroomAerators,
+    hasShowerData,
+    hasShowers,
+    hasToilets,
+    hasNotes,
+  })
 
   // Event handlers
   const handleNoteEdit = (unit: string, value: string) => {
@@ -692,7 +852,7 @@ export default function ReportDetailPage({
               const bathroomAerator = bathroomAeratorColumn
                 ? getAeratorDescription(item[bathroomAeratorColumn], "bathroom")
                 : ""
-              const shower = showerHeadColumn ? getAeratorDescription(item[showerHeadColumn], "shower") : ""
+              const shower = getShowerValue(item) // Use the new function
               const toilet = hasToiletInstalled(item) ? "0.8 GPF" : ""
 
               // Get compiled notes (including "not accessed" for details section)
@@ -878,7 +1038,7 @@ export default function ReportDetailPage({
                   const bathroomAerator = bathroomAeratorColumn
                     ? getAeratorDescription(item[bathroomAeratorColumn], "bathroom")
                     : ""
-                  const shower = showerHeadColumn ? getAeratorDescription(item[showerHeadColumn], "shower") : ""
+                  const shower = getShowerValue(item) // Use the new function
                   const toilet = hasToiletInstalled(item) ? "0.8 GPF" : ""
 
                   const compiledNotes = compileNotesForUnit(item, true)

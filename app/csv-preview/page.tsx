@@ -145,30 +145,30 @@ export default function CsvPreviewPage() {
   }
 
   // Handle cell selection for notes
-  const handleCellToggle = (rowIndex: number, column: string, value: string) => {
-    const unitValue = previewData[rowIndex][selectedUnitColumn]
-    if (!unitValue) return
+const handleCellToggle = (rowIndex: number, column: string, value: string) => {
+  const unitValue = previewData[rowIndex][selectedUnitColumn]
+  if (!unitValue) return
 
-    setSelectedCells((prev) => {
-      const unitCells = prev[unitValue] || []
-      const cellIdentifier = `${getProperCase(column)}: ${value}`
+  setSelectedCells((prev) => {
+    const unitCells = prev[unitValue] || []
+    const cellIdentifier = `${value}` // Removed column name
 
-      const isSelected = unitCells.includes(cellIdentifier)
+    const isSelected = unitCells.includes(cellIdentifier)
 
-      if (isSelected) {
-        // Remove cell
-        const updatedCells = unitCells.filter((cell) => cell !== cellIdentifier)
-        if (updatedCells.length === 0) {
-          const { [unitValue]: removed, ...rest } = prev
-          return rest
-        }
-        return { ...prev, [unitValue]: updatedCells }
-      } else {
-        // Add cell
-        return { ...prev, [unitValue]: [...unitCells, cellIdentifier] }
+    if (isSelected) {
+      // Remove cell
+      const updatedCells = unitCells.filter((cell) => cell !== cellIdentifier)
+      if (updatedCells.length === 0) {
+        const { [unitValue]: removed, ...rest } = prev
+        return rest
       }
-    })
-  }
+      return { ...prev, [unitValue]: updatedCells }
+    } else {
+      // Add cell
+      return { ...prev, [unitValue]: [...unitCells, cellIdentifier] }
+    }
+  })
+}
 
   // Check if a cell is selected
   const isCellSelected = (rowIndex: number, column: string, value: string): boolean => {
@@ -260,7 +260,7 @@ export default function CsvPreviewPage() {
         "Shower Head": item["Shower Head"] || "",
         "Bathroom aerator": item["Bathroom aerator"] || "",
         "Kitchen Aerator": item["Kitchen Aerator"] || "",
-        "Leak Issue Kitchen Faucet": item["Leak Issue Kitchen Faucet"] || "",
+        "Leak Issue Kitchen Faucet": item["Leak Issue Bath Faucet"] || "",
         "Leak Issue Bath Faucet": item["Leak Issue Bath Faucet"] || "",
         "Tub Spout/Diverter Leak Issue": item["Tub Spout/Diverter Leak Issue"] || "",
         Notes: "",
@@ -280,7 +280,8 @@ export default function CsvPreviewPage() {
       notesColumns.forEach((column) => {
         const value = item[column]
         if (value && value.trim() !== "") {
-          additionalNotes += `${getProperCase(column)}: ${value}. `
+          const sentenceCaseValue = value.charAt(0).toUpperCase() + value.slice(1).toLowerCase()
+          additionalNotes += `${sentenceCaseValue}. `
         }
       })
 
@@ -308,6 +309,11 @@ export default function CsvPreviewPage() {
 
       return a.Unit.localeCompare(b.Unit, undefined, { numeric: true, sensitivity: "base" })
     })
+
+    // Save the selected cell data to localStorage for the notes section to use
+    console.log("Saving selected cells to localStorage:", cellSelections)
+    localStorage.setItem("selectedCells", JSON.stringify(cellSelections))
+    localStorage.setItem("selectedNotesColumns", JSON.stringify(notesColumns))
 
     return {
       installationData: filteredData,

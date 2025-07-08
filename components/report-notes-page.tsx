@@ -199,6 +199,27 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
     const unitColumn = findUnitColumn(installationData)
     console.log("Notes: Using unit column:", unitColumn)
 
+    // Load selected cells and columns from localStorage (from CSV preview)
+    let selectedCells: Record<string, string[]> = {}
+    let selectedNotesColumns: string[] = []
+
+    try {
+      const storedSelectedCells = localStorage.getItem("selectedCells")
+      const storedSelectedNotesColumns = localStorage.getItem("selectedNotesColumns")
+
+      if (storedSelectedCells) {
+        selectedCells = JSON.parse(storedSelectedCells)
+        console.log("Notes: Loaded selected cells from preview:", selectedCells)
+      }
+
+      if (storedSelectedNotesColumns) {
+        selectedNotesColumns = JSON.parse(storedSelectedNotesColumns)
+        console.log("Notes: Loaded selected notes columns from preview:", selectedNotesColumns)
+      }
+    } catch (error) {
+      console.error("Notes: Error loading selected data from preview:", error)
+    }
+
     // Always regenerate notes from installation data - don't use stored notes
     console.log("Notes: Regenerating notes from installation data...")
 
@@ -209,7 +230,22 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
         console.log(`Notes: Processing item ${index + 1}, unit: ${unitValue}`)
 
         // For notes section, do NOT include "not accessed" messages (includeNotAccessed = false)
-        const compiledNote = compileNotesForUnit(item, unitColumn, false)
+        let compiledNote = compileNotesForUnit(item, unitColumn, false)
+
+        // Add notes from the original Notes field (from CSV preview selections)
+        // Process each selected note without column prefixes
+        if (item.Notes && item.Notes.trim() !== "") {
+          const rawNote = item.Notes.trim()
+
+          // Format the note with proper sentence case (no column name prefix)
+          const formattedNote = formatNote(rawNote)
+
+          if (compiledNote && compiledNote.trim() !== "") {
+            compiledNote += " " + formattedNote
+          } else {
+            compiledNote = formattedNote
+          }
+        }
 
         const noteObj = {
           unit: unitValue,
@@ -221,7 +257,7 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
         return noteObj
       })
       .filter((note) => {
-        // Only include notes that have actual leak content (no "not accessed" messages)
+        // Only include notes that have actual content
         const hasContent = note.note && note.note.trim() !== ""
         console.log(`Notes: Filtering note for unit ${note.unit}, has content: ${hasContent}, note: "${note.note}"`)
         return hasContent
@@ -236,23 +272,19 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
     localStorage.setItem("reportNotes", JSON.stringify(processedNotes))
   }, [installationData])
 
-  // Filter out notes without valid unit numbers
+  // Filter out notes without valid unit numbers - use editedNotes directly for reactivity
   const filteredNotes = editedNotes.filter((note) => {
     if (!note.unit || note.unit.trim() === "") {
       return false
     }
 
     const lowerUnit = note.unit.toLowerCase()
-    const invalidValues = ["total", "sum", "average", "avg", "count", "header", "n/a", "na"]
+    const invalidValues = ["total", "sum", "average", "avg", "count", "header"]
     if (invalidValues.some((val) => lowerUnit.includes(val))) {
       return false
     }
 
-    // Only include notes that have actual content (leak issues only)
-    if (!note.note || note.note.trim() === "") {
-      return false
-    }
-
+    // Include all notes, even empty ones for editing
     return true
   })
 
@@ -288,9 +320,18 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
     if (isEditable) {
       // Create a deep copy of the edited notes array
       const updatedNotes = JSON.parse(JSON.stringify(editedNotes))
-      updatedNotes[index] = { ...updatedNotes[index], [field]: value }
 
-      console.log(`Updating note ${index}, field ${field} to "${value}"`, updatedNotes[index])
+      // Handle the unit field properly
+      if (field === "unit" || field === getUnitProperty(updatedNotes[index])) {
+        // Update the unit field
+        const unitProp = getUnitProperty(updatedNotes[index])
+        updatedNotes[index][unitProp] = value
+        updatedNotes[index].unit = value // Also update the standard unit field
+      } else {
+        updatedNotes[index][field] = value
+      }
+
+      console.log(`Updating note ${index}, field ${String(field)} to "${value}"`, updatedNotes[index])
 
       // If we're changing a unit number, resort the entire array
       if (field === "unit" || field === getUnitProperty(updatedNotes[index])) {
@@ -316,11 +357,15 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
         note: "",
       }
 
-      const updatedNotes = [...editedNotes, newNote]
+      // Add to the beginning of the array so it appears at the top
+      const updatedNotes = [newNote, ...editedNotes]
+      console.log("Adding new note, before:", editedNotes.length, "after:", updatedNotes.length)
+
       setEditedNotes(updatedNotes)
       setNotes(updatedNotes)
       localStorage.setItem("reportNotes", JSON.stringify(updatedNotes))
       console.log("Added new note:", newNote)
+      console.log("Updated notes array:", updatedNotes)
     }
   }
 
@@ -332,6 +377,7 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
       setNotes(updatedNotes)
       localStorage.setItem("reportNotes", JSON.stringify(updatedNotes))
       console.log(`Deleted note at index ${index}`)
+      console.log("Updated notes after deletion:", updatedNotes)
     }
   }
 
