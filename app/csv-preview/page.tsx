@@ -445,7 +445,7 @@ const handleCellToggle = (rowIndex: number, column: string, value: string) => {
       {/* Data Preview */}
       <Card>
         <CardHeader>
-          <CardTitle>Data Preview (All {previewData.length} rows)</CardTitle>
+          <CardTitle>Data Preview ({previewData.length} rows)</CardTitle>
           <p className="text-sm text-muted-foreground">
             Click on cells to add them to notes for specific units. The selected unit column is highlighted.
           </p>

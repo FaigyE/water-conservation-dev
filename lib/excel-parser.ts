@@ -51,32 +51,42 @@ export async function parseExcelFile(file: File): Promise<InstallationData[]> {
               console.log("Excel->CSV: Parsing complete, raw data length:", results.data.length)
 
               // Helper function to find the unit column by looking for headers containing "unit"
-              const findUnitColumn = (row: any): { value: any; columnName: string } => {
+              const findUnitColumn = (headers: string[]): string => {
                 // First, look for any column header that contains "unit" (case-insensitive)
-                for (const key of Object.keys(row)) {
-                  if (key.toLowerCase().includes("unit")) {
-                    console.log(`Excel->CSV: Found unit column by keyword: "${key}"`)
-                    return { value: row[key], columnName: key }
+                for (const header of headers) {
+                  if (header.toLowerCase().includes("unit")) {
+                    console.log(`Excel->CSV: Found unit column by keyword: "${header}"`)
+                    return header
                   }
                 }
 
                 // Then try other apartment-related keywords
                 const apartmentKeywords = ["apt", "apartment", "room"]
-                for (const key of Object.keys(row)) {
-                  const keyLower = key.toLowerCase()
+                for (const header of headers) {
+                  const headerLower = header.toLowerCase()
                   for (const keyword of apartmentKeywords) {
-                    if (keyLower.includes(keyword)) {
-                      console.log(`Excel->CSV: Found unit column by apartment keyword "${keyword}": "${key}"`)
-                      return { value: row[key], columnName: key }
+                    if (headerLower.includes(keyword)) {
+                      console.log(`Excel->CSV: Found unit column by apartment keyword "${keyword}": "${header}"`)
+                      return header
                     }
                   }
                 }
 
                 // If no suitable column found, use the first column as a fallback
-                const firstKey = Object.keys(row)[0]
-                console.log(`Excel->CSV: No unit column found, using first column as fallback: "${firstKey}"`)
-                return { value: row[firstKey], columnName: firstKey }
+                const firstHeader = headers[0]
+                console.log(`Excel->CSV: No unit column found, using first column as fallback: "${firstHeader}"`)
+                return firstHeader
               }
+
+              // Find the unit column once using the first row's headers
+              if (results.data.length === 0) {
+                console.log("Excel->CSV: No data rows found")
+                csvResolve([])
+                return
+              }
+
+              const headers = Object.keys(results.data[0])
+              const unitColumnName = findUnitColumn(headers)
 
               // Apply the same filtering logic as CSV files
               const filteredData = []
@@ -84,8 +94,8 @@ export async function parseExcelFile(file: File): Promise<InstallationData[]> {
               for (let i = 0; i < results.data.length; i++) {
                 const row: any = results.data[i]
 
-                // Use the improved unit column detection
-                const { value: unitValue, columnName: unitColumnName } = findUnitColumn(row)
+                // Use the pre-determined unit column
+                const unitValue = row[unitColumnName]
 
                 // Log each row for debugging
                 console.log(
@@ -167,11 +177,10 @@ export async function parseExcelFile(file: File): Promise<InstallationData[]> {
 
               console.log(`Excel->CSV: Final result: ${filteredData.length} valid units processed`)
 
-              // Sort the results
+              // Sort the results using the pre-determined unit column
               const sortedData = filteredData.sort((a, b) => {
-                // Use the same unit column detection for sorting
-                const { value: unitA } = findUnitColumn(a)
-                const { value: unitB } = findUnitColumn(b)
+                const unitA = a[unitColumnName]
+                const unitB = b[unitColumnName]
 
                 // Try to parse as numbers first
                 const numA = Number.parseInt(unitA)
