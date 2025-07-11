@@ -2,8 +2,7 @@
 
 import { useReportContext } from "@/lib/report-context"
 import EditableText from "@/components/editable-text"
-// Import the ImageUploader component but we won't use it
-// import ImageUploader from "@/components/image-uploader"
+import ImageUploader from "@/components/image-uploader"
 import type { CustomerInfo } from "@/lib/types"
 
 interface ReportCoverPageProps {
@@ -86,17 +85,25 @@ export default function ReportCoverPage({ customerInfo, isEditable = true }: Rep
           )}
         </p>
 
-        {/* Remove the image uploader section but keep displaying the image if it exists */}
-        {coverImage && (
-          <div className="mb-12">
-            <img
-              src={coverImage || "/placeholder.svg"}
-              alt="Cover"
-              className="max-h-60 object-contain"
-              style={{ width: "80%" }}
-            />
-          </div>
-        )}
+        {/* Image upload section - positioned between address and ATTN */}
+        <div className="mb-12 w-full flex flex-col items-center">
+          
+
+          {coverImage && (
+            <div className="w-full flex justify-center">
+              <img
+                src={coverImage || "/placeholder.svg"}
+                alt="Cover"
+                className="object-contain border rounded"
+                style={{
+                  width: "85%",
+                  aspectRatio: "16/9",
+                  objectFit: "contain",
+                }}
+              />
+            </div>
+          )}
+        </div>
 
         <div className="text-center mb-16">
           <p className="text-lg mb-4">ATTN:</p>

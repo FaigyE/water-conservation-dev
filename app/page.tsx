@@ -24,6 +24,7 @@ export default function Home() {
   const [unitType, setUnitType] = useState("Unit")
   const [coverImage, setCoverImage] = useState<string | null>(null)
   const [imageSize, setImageSize] = useState<number>(80)
+  const [formImage, setFormImage] = useState<string | null>(null)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -233,7 +234,7 @@ export default function Home() {
       )
 
       // Save coverImage and imageSize to localStorage
-      localStorage.setItem("coverImage", JSON.stringify(coverImage))
+      localStorage.setItem("coverImage", JSON.stringify(formImage))
       localStorage.setItem("coverImageSize", JSON.stringify(imageSize))
 
       // Navigate to CSV preview page instead of report page
@@ -335,6 +336,40 @@ export default function Home() {
                   <Input id="zip" value={zip} onChange={(e) => setZip(e.target.value)} required />
                 </div>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="formImage">Cover Image (Optional)</Label>
+              <p className="text-sm text-muted-foreground">Upload an image to display on the cover page</p>
+              <Input
+                id="formImage"
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    const file = e.target.files[0]
+                    const reader = new FileReader()
+                    reader.onload = (event) => {
+                      setFormImage(event.target?.result as string)
+                    }
+                    reader.readAsDataURL(file)
+                  }
+                }}
+              />
+              {formImage && (
+                <div className="mt-4">
+                  <img
+                    src={formImage || "/placeholder.svg"}
+                    alt="Cover preview"
+                    className="w-full max-w-4xl mx-auto border rounded-lg"
+                    style={{
+                      width: "85%",
+                      aspectRatio: "16/9",
+                      objectFit: "contain",
+                    }}
+                  />
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">

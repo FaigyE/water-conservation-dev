@@ -623,7 +623,7 @@ export default function EnhancedPdfButton({
       const logoY = 5 // Moved higher up from 10
 
       // Calculate the position where content should start (below the logo with some margin)
-      const contentStartY = logoY + logoHeight + 15 // Increased from 10 to 15mm margin below the logo
+      const contentStartY = logoY + logoHeight + 5 // Increased from 10 to 15mm margin below the logo
 
       // Calculate footer dimensions to fill the entire page width
       const footerWidth = pageWidth
@@ -713,55 +713,96 @@ export default function EnhancedPdfButton({
       addHeaderFooter(1, totalPages)
 
       doc.setFontSize(24)
-      doc.text(reportTitle, 105, 80, { align: "center" })
+      doc.setTextColor("#1F497D")
+      doc.text(reportTitle, 105, 50, { align: "center" })
+      doc.setDrawColor("#1F497D")
+      doc.line(20, 65, 190, 65)
 
       // Add the address
-      doc.setFontSize(16)
-      doc.text(`${customerInfo.address}`, 105, 100, { align: "center" })
-      doc.text(`${customerInfo.city}, ${customerInfo.state} ${customerInfo.zip}`, 105, 110, { align: "center" })
+      doc.setFontSize(14)
+      doc.text(`${customerInfo.address} ${customerInfo.city}, ${customerInfo.state} ${customerInfo.zip}`, 105, 60, { align: "center" })
+      //doc.text(`${customerInfo.city}, ${customerInfo.state} ${customerInfo.zip}`, 105, 110, { align: "center" })
+
+      doc.setTextColor(0,0,0)
+
 
       // Add cover image if available
+      let imageBottomY = 65 // Default to just below the line if no image
+      
       if (coverImage) {
         try {
           // Create a temporary image to get dimensions
           const tempImg = new Image()
           tempImg.src = coverImage
+          
+          // Wait for image to load to get dimensions
+          await new Promise((resolve, reject) => {
+            tempImg.onload = resolve
+            tempImg.onerror = reject
+            setTimeout(reject, 5000) // 5 second timeout
+          })
 
-          // Calculate dimensions to fit within the page while maintaining aspect ratio
-          const maxWidth = 120 // Maximum width in mm
-          const maxHeight = 60 // Maximum height in mm
-
-          let imgWidth = tempImg.width
-          let imgHeight = tempImg.height
-
-          if (imgWidth > 0 && imgHeight > 0) {
-            // Calculate the scaling factor
-            const scaleWidth = maxWidth / imgWidth
-            const scaleHeight = maxHeight / imgHeight
-            const scale = Math.min(scaleWidth, scaleHeight) * (coverImageSize / 100) // Apply user's size preference
-
-            imgWidth = imgWidth * scale
-            imgHeight = imgHeight * scale
-
-            // Center the image horizontally
-            const imgX = (pageWidth - imgWidth) / 2
-
-            // Position the image below the address
-            doc.addImage(coverImage, "JPEG", imgX, 120, imgWidth, imgHeight)
+          // Define the space boundaries
+          const topBoundary = 70 // Just below the address line
+          const bottomBoundary = 200 // Leave space for ATTN section
+          const availableHeight = bottomBoundary - topBoundary // 130mm of vertical space
+          
+          // Calculate maximum dimensions
+          const maxWidth = pageWidth * 0.85 // 85% of page width
+          const maxHeight = availableHeight
+          
+          // Calculate the aspect ratio
+          const aspectRatio = tempImg.width / tempImg.height
+          
+          // Calculate dimensions to fit within constraints while maintaining aspect ratio
+          let imgWidth = maxWidth
+          let imgHeight = imgWidth / aspectRatio
+          
+          // If height exceeds available space, scale down based on height instead
+          if (imgHeight > maxHeight) {
+            imgHeight = maxHeight
+            imgWidth = imgHeight * aspectRatio
           }
+          
+          // Center the image horizontally
+          const imgX = (pageWidth - imgWidth) / 2
+          
+          // Center the image vertically within the available space
+          const verticalPadding = (availableHeight - imgHeight) / 2
+          const imgY = topBoundary + verticalPadding
+          
+          // Add the image
+          doc.addImage(coverImage, "JPEG", imgX, imgY, imgWidth, imgHeight)
+          
+          // Update where the image ends
+          imageBottomY = imgY + imgHeight
+          
         } catch (error) {
           console.error("Error adding cover image to PDF:", error)
+          // If there's an error, try adding the image without calculating dimensions
+          try {
+            const maxWidth = pageWidth * 0.85
+            const imgX = (pageWidth - maxWidth) / 2
+            const defaultHeight = maxWidth * 0.75
+            const imgY = 70 + (130 - defaultHeight) / 2 // Center in available space
+            doc.addImage(coverImage, "JPEG", imgX, imgY, maxWidth, defaultHeight)
+            imageBottomY = imgY + defaultHeight
+          } catch (fallbackError) {
+            console.error("Fallback error adding cover image:", fallbackError)
+          }
         }
       }
 
-      // Adjust the ATTN position to be below the image
+      // Position ATTN section with proper spacing below the image
       doc.setFontSize(14)
-      // If there's a cover image, position ATTN further down
-      const attnY = coverImage ? 190 : 120
+      const attnY = Math.max(imageBottomY + 20, 210) // At least 20mm below image, but not lower than 210
+      
       doc.text("ATTN:", 105, attnY, { align: "center" })
-      doc.setFontSize(16)
-      doc.text(customerInfo.customerName, 105, attnY + 10, { align: "center" })
-      doc.text(customerInfo.propertyName, 105, attnY + 20, { align: "center" })
+      doc.setFontSize(13)
+      doc.text(customerInfo.customerName, 105, attnY + 5, { align: "center" })
+      doc.text(customerInfo.propertyName, 105, attnY + 10, { align: "center" })
+      doc.text(`${customerInfo.address} ${customerInfo.city}, ${customerInfo.state} ${customerInfo.zip}`, 105, attnY + 15 , { align: "center" })
+
 
       // Letter Page
       doc.addPage()
