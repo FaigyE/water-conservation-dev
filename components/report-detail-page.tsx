@@ -38,10 +38,10 @@ export default function ReportDetailPage({
   const [additionalRows, setAdditionalRows] = useState<InstallationData[]>([])
   const [columnHeaders, setColumnHeaders] = useState({
     unit: "Unit",
-    kitchen: "Kitchen",
-    bathroom: "Bathroom",
-    shower: "Shower",
-    toilet: "Toilet",
+    kitchen: "Kitchen Installed",
+    bathroom: "Bathroom Installed",
+    shower: "Shower Installed",
+    toilet: "Toilet Installed",
     notes: "Notes",
   })
 
