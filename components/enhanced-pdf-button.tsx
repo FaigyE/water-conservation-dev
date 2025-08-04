@@ -7,6 +7,7 @@ import type { CustomerInfo, InstallationData, Note } from "@/lib/types"
 import { useReportContext } from "@/lib/report-context"
 // Import the formatNote function
 import { getAeratorDescription, formatNote } from "@/lib/utils/aerator-helpers"
+import { getStoredNotes, getFinalNoteForUnit } from "@/lib/notes"
 
 interface EnhancedPdfButtonProps {
   customerInfo: CustomerInfo
@@ -38,10 +39,10 @@ export default function EnhancedPdfButton({
   // Add state for column headers
   const [columnHeaders, setColumnHeaders] = useState({
     unit: "Unit",
-    kitchen: "Kitchen",
-    bathroom: "Bathroom",
-    shower: "Shower",
-    toilet: "Toilet",
+    kitchen: "Kitchen\nInstalled",
+    bathroom: "Bathroom\nInstalled",
+    shower: "Shower\nInstalled",
+    toilet: "Toilet\nInstalled",
     notes: "Notes",
   })
   // Add state for edited units
@@ -61,18 +62,23 @@ export default function EnhancedPdfButton({
     notes: contextNotes, // Add this to get the latest notes from context
   } = useReportContext()
 
-  // Load edited notes from localStorage
+  // Load unified notes from localStorage
   useEffect(() => {
-    const storedNotes = localStorage.getItem("detailNotes")
-    if (storedNotes) {
-      try {
-        const parsedNotes = JSON.parse(storedNotes)
-        setEditedDetailNotes(parsedNotes)
-        console.log("PDF: Loaded edited detail notes from localStorage:", parsedNotes)
-      } catch (error) {
-        console.error("PDF: Error parsing stored detail notes:", error)
-      }
+    const storedNotes = getStoredNotes()
+    setEditedDetailNotes(storedNotes)
+    console.log("PDF: Loaded unified notes from localStorage:", storedNotes)
+  }, [])
+
+  // Listen for unified notes updates
+  useEffect(() => {
+    const handleNotesUpdate = () => {
+      console.log("PDF: Received unified notes update event")
+      const storedNotes = getStoredNotes()
+      setEditedDetailNotes(storedNotes)
     }
+
+    window.addEventListener("unifiedNotesUpdated", handleNotesUpdate)
+    return () => window.removeEventListener("unifiedNotesUpdated", handleNotesUpdate)
   }, [])
 
   // Load edited installations from localStorage
@@ -402,16 +408,13 @@ export default function EnhancedPdfButton({
         console.error("PDF: Error parsing stored units:", error)
       }
 
-      // Load the latest edited notes from localStorage right before generating the PDF
+      // Load the latest unified notes from localStorage right before generating the PDF
       let latestEditedNotes: Record<string, string> = {}
       try {
-        const storedNotes = localStorage.getItem("detailNotes")
-        if (storedNotes) {
-          latestEditedNotes = JSON.parse(storedNotes)
-          console.log("PDF: Loaded latest edited detail notes from localStorage:", latestEditedNotes)
-        }
+        latestEditedNotes = getStoredNotes()
+        console.log("PDF: Loaded latest unified notes from localStorage:", latestEditedNotes)
       } catch (error) {
-        console.error("PDF: Error parsing stored detail notes:", error)
+        console.error("PDF: Error loading unified notes:", error)
       }
 
       // Load the latest edited installations from localStorage right before generating the PDF
@@ -576,8 +579,8 @@ export default function EnhancedPdfButton({
           const unitB = unitColumn ? b[unitColumn] : b.Unit
 
           // Get edited unit numbers if they exist
-          const finalUnitA = latestEditedUnits[unitA] !== undefined ? latestEditedUnits[unitA] : unitA
-          const finalUnitB = latestEditedUnits[unitB] !== undefined ? latestEditedUnits[unitB] : unitB
+          const finalUnitA = unitA && latestEditedUnits[unitA] !== undefined ? latestEditedUnits[unitA] : unitA || ""
+          const finalUnitB = unitB && latestEditedUnits[unitB] !== undefined ? latestEditedUnits[unitB] : unitB || ""
 
           // Try to parse as numbers first
           const numA = Number.parseInt(finalUnitA)
@@ -830,7 +833,7 @@ export default function EnhancedPdfButton({
 
       processedLetterText.forEach((paragraph) => {
         const lines = doc.splitTextToSize(paragraph, 180)
-        lines.forEach((line) => {
+        lines.forEach((line: string) => {
           doc.text(line, 15, yPos)
           yPos += 7
         })
@@ -911,7 +914,7 @@ export default function EnhancedPdfButton({
             }
 
             // Add the note text
-            noteLines.forEach((line, lineIndex) => {
+            noteLines.forEach((line: string, lineIndex: number) => {
               if (lineIndex === 0) {
                 doc.text(line, 50, yPos)
               } else {
@@ -1057,26 +1060,51 @@ export default function EnhancedPdfButton({
         doc.setFillColor(240, 240, 240)
         doc.rect(15, yPos - 5, 180, 10, "F")
         doc.setFont("helvetica", "bold")
-        doc.setFontSize(9)
+        doc.setFontSize(8) // Smaller font for headers to fit better
 
         let colIndex = 0
-        doc.text(latestColumnHeaders.unit, columnPositions[colIndex++], yPos)
+        // Wrap and position unit header
+        const unitHeaderLines = doc.splitTextToSize(latestColumnHeaders.unit, columnWidths[colIndex] - 2)
+        unitHeaderLines.forEach((line: string, lineIndex: number) => {
+          doc.text(line, columnPositions[colIndex], yPos + (lineIndex * 3))
+        })
+        colIndex++
 
-        // Use shorter header text to avoid overlap
+        // Wrap and position kitchen header
         if (hasKitchenAerators) {
-          doc.text(latestColumnHeaders.kitchen, columnPositions[colIndex++], yPos)
+          const kitchenHeaderLines = latestColumnHeaders.kitchen.split('\n')
+          kitchenHeaderLines.forEach((line: string, lineIndex: number) => {
+            doc.text(line, columnPositions[colIndex], yPos + (lineIndex * 3))
+          })
+          colIndex++
         }
         if (hasBathroomAerators) {
-          doc.text(latestColumnHeaders.bathroom, columnPositions[colIndex++], yPos)
+          const bathroomHeaderLines = latestColumnHeaders.bathroom.split('\n')
+          bathroomHeaderLines.forEach((line: string, lineIndex: number) => {
+            doc.text(line, columnPositions[colIndex], yPos + (lineIndex * 3))
+          })
+          colIndex++
         }
         if (hasShowers) {
-          doc.text(latestColumnHeaders.shower, columnPositions[colIndex++], yPos)
+          const showerHeaderLines = latestColumnHeaders.shower.split('\n')
+          showerHeaderLines.forEach((line: string, lineIndex: number) => {
+            doc.text(line, columnPositions[colIndex], yPos + (lineIndex * 3))
+          })
+          colIndex++
         }
         if (hasToilets) {
-          doc.text(latestColumnHeaders.toilet, columnPositions[colIndex++], yPos)
+          const toiletHeaderLines = latestColumnHeaders.toilet.split('\n')
+          toiletHeaderLines.forEach((line: string, lineIndex: number) => {
+            doc.text(line, columnPositions[colIndex], yPos + (lineIndex * 3))
+          })
+          colIndex++
         }
         if (hasNotes) {
-          doc.text(latestColumnHeaders.notes, columnPositions[colIndex++], yPos)
+          const notesHeaderLines = doc.splitTextToSize(latestColumnHeaders.notes, columnWidths[colIndex] - 2)
+          notesHeaderLines.forEach((line: string, lineIndex: number) => {
+            doc.text(line, columnPositions[colIndex], yPos + (lineIndex * 3))
+          })
+          colIndex++
         }
 
         doc.setFont("helvetica", "normal")
@@ -1093,6 +1121,13 @@ export default function EnhancedPdfButton({
           // Store the initial y position for this row
           const rowStartY = yPos - 5
 
+          // Use the edited unit number if available, otherwise use the original
+          const originalUnitValue = unitColumn ? item[unitColumn] : item.Unit
+          const displayUnit =
+            (originalUnitValue && latestEditedUnits[originalUnitValue] !== undefined)
+              ? latestEditedUnits[originalUnitValue]
+              : originalUnitValue || ""
+
           // Check if this is a special unit (shower room, office, etc.)
           const isSpecialUnit =
             (unitColumn && item[unitColumn] && item[unitColumn].toLowerCase().includes("shower")) ||
@@ -1107,27 +1142,27 @@ export default function EnhancedPdfButton({
           const kitchenAerator =
             isSpecialUnit || !kitchenAeratorColumn
               ? ""
-              : latestEditedInstallations[item[unitColumn]]?.kitchen !== undefined
+              : (unitColumn && item[unitColumn] && latestEditedInstallations[item[unitColumn]]?.kitchen !== undefined)
                 ? latestEditedInstallations[item[unitColumn]].kitchen
-                : getAeratorDescription(item[kitchenAeratorColumn], "kitchen")
+                : getAeratorDescription(item[kitchenAeratorColumn] || "", "kitchen")
 
           // Replace the bathroomAerator calculation with:
           const bathroomAerator = !bathroomAeratorColumn
             ? ""
-            : latestEditedInstallations[item[unitColumn]]?.bathroom !== undefined
+            : (unitColumn && item[unitColumn] && latestEditedInstallations[item[unitColumn]]?.bathroom !== undefined)
               ? latestEditedInstallations[item[unitColumn]].bathroom
-              : getAeratorDescription(item[bathroomAeratorColumn], "bathroom")
+              : getAeratorDescription(item[bathroomAeratorColumn] || "", "bathroom")
 
           // Replace the showerHead calculation with:
           const showerHead = !showerHeadColumn
             ? ""
-            : latestEditedInstallations[item[unitColumn]]?.shower !== undefined
+            : (unitColumn && item[unitColumn] && latestEditedInstallations[item[unitColumn]]?.shower !== undefined)
               ? latestEditedInstallations[item[unitColumn]].shower
-              : getAeratorDescription(item[showerHeadColumn], "shower")
+              : getAeratorDescription(item[showerHeadColumn] || "", "shower")
 
           // Replace the toilet calculation with:
           const toilet =
-            latestEditedInstallations[item[unitColumn]]?.toilet !== undefined
+            (unitColumn && item[unitColumn] && latestEditedInstallations[item[unitColumn]]?.toilet !== undefined)
               ? latestEditedInstallations[item[unitColumn]].toilet
               : hasToiletInstalled(item)
                 ? "0.8 GPF"
@@ -1207,9 +1242,9 @@ export default function EnhancedPdfButton({
           // Format the notes with proper sentence case
           noteText = formatNote(noteText)
 
-          // Use edited note if available from localStorage
-          const finalNoteText =
-            latestEditedNotes[item[unitColumn]] !== undefined ? latestEditedNotes[item[unitColumn]] : noteText
+          // Use unified notes system
+          const unitValue = unitColumn ? item[unitColumn] : item.Unit
+          const finalNoteText = getFinalNoteForUnit(unitValue || "", noteText)
 
           // Calculate how many lines the note will take
           let noteLines: string[] = []
@@ -1219,8 +1254,22 @@ export default function EnhancedPdfButton({
             noteLines = doc.splitTextToSize(finalNoteText, maxWidth)
           }
 
-          // Calculate the height this row will take
-          const rowHeight = Math.max(10, noteLines.length * 5 + 5) // Minimum 10mm, or more if needed for notes
+          // Calculate unit text lines for height calculation
+          const unitLinesForHeight = doc.splitTextToSize(displayUnit, columnWidths[0] - 2)
+          const unitHeight = Math.max(10, unitLinesForHeight.length * 3) // Height for unit text
+          const rowHeight = Math.max(10, Math.max(unitHeight, noteLines.length * 5 + 5)) // Minimum 10mm, or more if needed for notes or unit text
+
+          // Check if this row will fit on the current page
+          if (yPos + rowHeight > maxYPos && rowCount > 0) {
+            // This row won't fit, so we'll start a new page
+            break
+          }
+
+          // Draw alternating row background
+          if (rowCount % 2 === 0) {
+            doc.setFillColor(250, 250, 250)
+            doc.rect(15, rowStartY, 180, rowHeight, "F")
+          }
 
           // Check if this row will fit on the current page
           if (yPos + rowHeight > maxYPos && rowCount > 0) {
@@ -1238,40 +1287,49 @@ export default function EnhancedPdfButton({
           doc.setFontSize(9)
 
           colIndex = 0
-          // Use the edited unit number if available, otherwise use the original
-          const originalUnitValue = unitColumn ? item[unitColumn] : item.Unit
-          const displayUnit =
-            latestEditedUnits[originalUnitValue] !== undefined
-              ? latestEditedUnits[originalUnitValue]
-              : originalUnitValue
-          doc.text(displayUnit, columnPositions[colIndex++], yPos)
+          
+          // Wrap unit text if it's too long
+          unitLinesForHeight.forEach((line: string, lineIndex: number) => {
+            doc.text(line, columnPositions[colIndex], yPos + (lineIndex * 3))
+          })
+          colIndex++
 
           if (hasKitchenAerators) {
             const kitchenText = kitchenAerator === "No Touch." ? "—" : kitchenAerator
-            doc.text(kitchenText, columnPositions[colIndex], yPos, {
-              align: kitchenText === "—" ? "center" : "left",
-            })
+            // Center the dash, left-align other text
+            if (kitchenText === "—") {
+              // Simple dash
+              doc.text("\t—\t", columnPositions[colIndex], yPos)
+            } else {
+              doc.text(kitchenText, columnPositions[colIndex], yPos)
+            }
             colIndex++
           }
           if (hasBathroomAerators) {
             const bathroomText = bathroomAerator === "No Touch." ? "—" : bathroomAerator
-            doc.text(bathroomText, columnPositions[colIndex], yPos, {
-              align: bathroomText === "—" ? "center" : "left",
-            })
+            if (bathroomText === "—") {
+              doc.text("\t—\t", columnPositions[colIndex], yPos)
+            } else {
+              doc.text(bathroomText, columnPositions[colIndex], yPos)
+            }
             colIndex++
           }
           if (hasShowers) {
             const showerText = showerHead === "No Touch." ? "—" : showerHead
-            doc.text(showerText, columnPositions[colIndex], yPos, {
-              align: showerText === "—" ? "center" : "left",
-            })
+            if (showerText === "—") {
+              doc.text("\t—\t", columnPositions[colIndex], yPos)
+            } else {
+              doc.text(showerText, columnPositions[colIndex], yPos)
+            }
             colIndex++
           }
           if (hasToilets) {
             const toiletText = toilet ? toilet : "—"
-            doc.text(toiletText, columnPositions[colIndex], yPos, {
-              align: toiletText === "—" ? "center" : "left",
-            })
+            if (toiletText === "—") {
+              doc.text("\t—\t", columnPositions[colIndex], yPos)
+            } else {
+              doc.text(toiletText, columnPositions[colIndex], yPos)
+            }
             colIndex++
           }
 

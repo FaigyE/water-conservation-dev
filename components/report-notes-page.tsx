@@ -6,6 +6,7 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Plus, Trash2 } from "lucide-react"
 import { formatNote } from "@/lib/utils/aerator-helpers"
+import { getUnifiedNotes, updateStoredNote, getStoredNotes } from "@/lib/notes"
 
 interface Note {
   unit: string
@@ -187,7 +188,7 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
     return formatNote(noteText + notes.trim())
   }
 
-  // Initialize editedNotes using installation data (same as details page)
+  // Initialize editedNotes using unified notes system
   useEffect(() => {
     console.log("Notes: Processing installation data, length:", installationData.length)
 
@@ -198,6 +199,11 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
 
     const unitColumn = findUnitColumn(installationData)
     console.log("Notes: Using unit column:", unitColumn)
+
+    if (!unitColumn) {
+      console.log("Notes: No unit column found")
+      return
+    }
 
     // Load selected cells and columns from localStorage (from CSV preview)
     let selectedCells: Record<string, string[]> = {}
@@ -220,57 +226,80 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
       console.error("Notes: Error loading selected data from preview:", error)
     }
 
-    // Always regenerate notes from installation data - don't use stored notes
-    console.log("Notes: Regenerating notes from installation data...")
+    // Use unified notes system to get notes
+    console.log("Notes: Using unified notes system...")
+    const unifiedNotes = getUnifiedNotes({
+      installationData,
+      unitColumn,
+      selectedCells,
+      selectedNotesColumns,
+    })
 
-    // Process installation data to create notes
-    const processedNotes = installationData
-      .map((item, index) => {
-        const unitValue = unitColumn ? item[unitColumn] : item.Unit
-        console.log(`Notes: Processing item ${index + 1}, unit: ${unitValue}`)
+    // Filter to only include notes with content (for notes section)
+    const filteredNotes = unifiedNotes.filter((note) => {
+      const hasContent = note.note && note.note.trim() !== ""
+      console.log(`Notes: Filtering note for unit ${note.unit}, has content: ${hasContent}, note: "${note.note}"`)
+      return hasContent
+    })
 
-        // For notes section, do NOT include "not accessed" messages (includeNotAccessed = false)
-        let compiledNote = compileNotesForUnit(item, unitColumn, false)
+    console.log("Notes: Final processed notes:", filteredNotes.length, "notes")
 
-        // Add notes from the original Notes field (from CSV preview selections)
-        // Process each selected note without column prefixes
-        if (item.Notes && item.Notes.trim() !== "") {
-          const rawNote = item.Notes.trim()
+    // Update state with unified notes
+    setEditedNotes(filteredNotes)
+    setNotes(filteredNotes)
 
-          // Format the note with proper sentence case (no column name prefix)
-          const formattedNote = formatNote(rawNote)
+    // Also update localStorage for backward compatibility
+    localStorage.setItem("reportNotes", JSON.stringify(filteredNotes))
+  }, [installationData, setNotes])
 
-          if (compiledNote && compiledNote.trim() !== "") {
-            compiledNote += " " + formattedNote
-          } else {
-            compiledNote = formattedNote
+  // Listen for unified notes updates
+  useEffect(() => {
+    const handleNotesUpdate = () => {
+      console.log("Notes: Received unified notes update event")
+      // Re-process notes when unified notes are updated
+      if (installationData.length > 0) {
+        const unitColumn = findUnitColumn(installationData)
+        if (unitColumn) {
+          let selectedCells: Record<string, string[]> = {}
+          let selectedNotesColumns: string[] = []
+
+          try {
+            const storedSelectedCells = localStorage.getItem("selectedCells")
+            const storedSelectedNotesColumns = localStorage.getItem("selectedNotesColumns")
+
+            if (storedSelectedCells) {
+              selectedCells = JSON.parse(storedSelectedCells)
+            }
+
+            if (storedSelectedNotesColumns) {
+              selectedNotesColumns = JSON.parse(storedSelectedNotesColumns)
+            }
+          } catch (error) {
+            console.error("Notes: Error loading selected data:", error)
           }
+
+          const unifiedNotes = getUnifiedNotes({
+            installationData,
+            unitColumn,
+            selectedCells,
+            selectedNotesColumns,
+          })
+
+          const filteredNotes = unifiedNotes.filter((note) => {
+            const hasContent = note.note && note.note.trim() !== ""
+            return hasContent
+          })
+
+          setEditedNotes(filteredNotes)
+          setNotes(filteredNotes)
+          localStorage.setItem("reportNotes", JSON.stringify(filteredNotes))
         }
+      }
+    }
 
-        const noteObj = {
-          unit: unitValue,
-          note: compiledNote,
-          ...item, // Include all original data
-        }
-
-        console.log(`Notes: Created note for unit ${unitValue}:`, noteObj)
-        return noteObj
-      })
-      .filter((note) => {
-        // Only include notes that have actual content
-        const hasContent = note.note && note.note.trim() !== ""
-        console.log(`Notes: Filtering note for unit ${note.unit}, has content: ${hasContent}, note: "${note.note}"`)
-        return hasContent
-      })
-
-    console.log("Notes: Final processed notes:", processedNotes.length, "notes")
-
-    // Always use the freshly processed notes
-    setEditedNotes(processedNotes)
-
-    // Update localStorage with fresh data
-    localStorage.setItem("reportNotes", JSON.stringify(processedNotes))
-  }, [installationData])
+    window.addEventListener("unifiedNotesUpdated", handleNotesUpdate)
+    return () => window.removeEventListener("unifiedNotesUpdated", handleNotesUpdate)
+  }, [installationData, setNotes])
 
   // Filter out notes without valid unit numbers - use editedNotes directly for reactivity
   const filteredNotes = editedNotes.filter((note) => {
@@ -325,8 +354,67 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
       if (field === "unit" || field === getUnitProperty(updatedNotes[index])) {
         // Update the unit field
         const unitProp = getUnitProperty(updatedNotes[index])
+        const oldUnit = updatedNotes[index][unitProp]
         updatedNotes[index][unitProp] = value
         updatedNotes[index].unit = value // Also update the standard unit field
+
+        // If unit changed, update the stored note with the new unit
+        if (oldUnit !== value) {
+          const storedNotes = getStoredNotes()
+          if (storedNotes[oldUnit] !== undefined) {
+            // Move the note from old unit to new unit
+            updateStoredNote(value, storedNotes[oldUnit])
+            // Remove the old unit entry
+            const updatedStoredNotes = { ...storedNotes }
+            delete updatedStoredNotes[oldUnit]
+            localStorage.setItem("unifiedNotes", JSON.stringify(updatedStoredNotes))
+          }
+        }
+
+        // If this is a new unit being added, ensure it appears in the details section
+        if (value && value.trim() !== "" && oldUnit === "") {
+          // Add the unit to the details section as an additional row
+          const additionalRows = JSON.parse(localStorage.getItem("additionalDetailRows") || "[]")
+          const unitColumn = findUnitColumn(installationData)
+          
+          // Check if this unit already exists in additional rows
+          const existingRow = additionalRows.find((row: any) => {
+            const rowUnit = unitColumn ? row[unitColumn] : row.Unit
+            return rowUnit === value
+          })
+
+          if (!existingRow) {
+            // Create a new row for the details section
+            const newRow: any = {
+              Unit: value,
+            }
+
+            // Add the unit column if it exists and is different from "Unit"
+            if (unitColumn && unitColumn !== "Unit") {
+              newRow[unitColumn] = value
+            }
+
+            // Add all standard columns
+            newRow["Shower Head"] = ""
+            newRow["Bathroom aerator"] = ""
+            newRow["Kitchen Aerator"] = ""
+            newRow["Leak Issue Kitchen Faucet"] = ""
+            newRow["Leak Issue Bath Faucet"] = ""
+            newRow["Tub Spout/Diverter Leak Issue"] = ""
+            newRow["Notes"] = ""
+
+            // Add to the beginning of additional rows
+            const updatedAdditionalRows = [newRow, ...additionalRows]
+            localStorage.setItem("additionalDetailRows", JSON.stringify(updatedAdditionalRows))
+            
+            console.log("Added unit to details section:", value)
+          }
+        }
+      } else if (field === "note") {
+        // Update the note content using unified system
+        const unitValue = updatedNotes[index].unit
+        updateStoredNote(unitValue, value)
+        updatedNotes[index][field] = value
       } else {
         updatedNotes[index][field] = value
       }
@@ -366,13 +454,42 @@ export default function ReportNotesPage({ notes, isPreview = true, isEditable = 
       localStorage.setItem("reportNotes", JSON.stringify(updatedNotes))
       console.log("Added new note:", newNote)
       console.log("Updated notes array:", updatedNotes)
+
+      // Also add the unit to the details section if it has a note
+      // This will be handled when the user actually enters a unit number and note
+      // The details section will automatically pick up the note through the unified notes system
     }
   }
 
   // Add function to delete a note
   const handleDeleteNote = (index: number) => {
     if (isEditable) {
+      const noteToDelete = editedNotes[index]
       const updatedNotes = editedNotes.filter((_, i) => i !== index)
+      
+      // Remove from unified notes storage
+      if (noteToDelete.unit) {
+        const storedNotes = getStoredNotes()
+        const updatedStoredNotes = { ...storedNotes }
+        delete updatedStoredNotes[noteToDelete.unit]
+        localStorage.setItem("unifiedNotes", JSON.stringify(updatedStoredNotes))
+        
+        // Also remove the unit from the details section if it was added there
+        const additionalRows = JSON.parse(localStorage.getItem("additionalDetailRows") || "[]")
+        const unitColumn = findUnitColumn(installationData)
+        
+        // Find and remove the row from additional rows
+        const updatedAdditionalRows = additionalRows.filter((row: any) => {
+          const rowUnit = unitColumn ? row[unitColumn] : row.Unit
+          return rowUnit !== noteToDelete.unit
+        })
+        
+        if (updatedAdditionalRows.length !== additionalRows.length) {
+          localStorage.setItem("additionalDetailRows", JSON.stringify(updatedAdditionalRows))
+          console.log("Removed unit from details section:", noteToDelete.unit)
+        }
+      }
+      
       setEditedNotes(updatedNotes)
       setNotes(updatedNotes)
       localStorage.setItem("reportNotes", JSON.stringify(updatedNotes))
