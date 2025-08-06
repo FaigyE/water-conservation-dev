@@ -100,14 +100,14 @@ export const consolidateInstallationsByUnitV2 = (data: any[]) => {
     }
   })
   
-  // Format the consolidated data
+  // Format the consolidated data - FIXED FORMAT
   return Object.values(consolidated).map((unit: any) => {
     return {
       ...unit,
-      'Kitchen Aerator': unit['Kitchen Aerator'] > 1 ? `${unit['Kitchen Aerator']} (${unit['Kitchen Aerator']})` : unit['Kitchen Aerator'] > 0 ? '1' : '',
-      'Bathroom aerator': unit['Bathroom aerator'] > 1 ? `${unit['Bathroom aerator']} (${unit['Bathroom aerator']})` : unit['Bathroom aerator'] > 0 ? '1' : '',
-      'Shower Head': unit['Shower Head'] > 1 ? `${unit['Shower Head']} (${unit['Shower Head']})` : unit['Shower Head'] > 0 ? '1' : '',
-      'Toilets Installed': unit['Toilets Installed'] > 1 ? `${unit['Toilets Installed']} (${unit['Toilets Installed']})` : unit['Toilets Installed'] > 0 ? '1' : '',
+      'Kitchen Aerator': unit['Kitchen Aerator'] > 1 ? `(${unit['Kitchen Aerator']})` : unit['Kitchen Aerator'] > 0 ? '1' : '',
+      'Bathroom aerator': unit['Bathroom aerator'] > 1 ? `(${unit['Bathroom aerator']})` : unit['Bathroom aerator'] > 0 ? '1' : '',
+      'Shower Head': unit['Shower Head'] > 1 ? `(${unit['Shower Head']})` : unit['Shower Head'] > 0 ? '1' : '',
+      'Toilets Installed': unit['Toilets Installed'] > 1 ? `(${unit['Toilets Installed']})` : unit['Toilets Installed'] > 0 ? '1' : '',
       Notes: unit.Notes.join('; ')
     }
   }).sort((a, b) => {
