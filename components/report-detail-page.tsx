@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, useMemo, useCallback } from "react"
-import { EditableText } from "@/components/editable-text"
+import EditableText from "@/components/editable-text"
 import { summarizeAeratorSavings, getAeratorSummaryTable, consolidateInstallationsByUnitV2 } from "@/lib/utils/aerator-helpers"
 import { useReportContext } from "@/lib/report-context"
 import { Button } from "@/components/ui/button"
@@ -9,7 +9,7 @@ import { updateStoredNote, getStoredNotes } from "@/lib/notes"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import Image from "next/image"
 import type { ReportImage } from "@/lib/types"
-import { ImageUploader } from "./image-uploader"
+import ImageUploader from "./image-uploader"
 import { useToast } from "@/hooks/use-toast"
 
 interface InstallationData {
@@ -25,18 +25,22 @@ interface InstallationData {
 }
 
 interface ReportDetailPageProps {
-  installationData: InstallationData[]
+  installationData?: InstallationData[]
   isPreview?: boolean
   isEditable?: boolean
 }
 
 export default function ReportDetailPage({
-  installationData: initialInstallationData,
+  installationData: propInstallationData,
   isPreview = true,
   isEditable = true,
 }: ReportDetailPageProps) {
   const { reportData, updateReportData, updateSectionTitle, setReportData } = useReportContext()
-  const { aeratorData = [], images } = reportData
+  const { aeratorData, images, installationData: contextInstallationData } = reportData
+  
+  // Use installation data from props, context, or empty array as fallback
+  const initialInstallationData = propInstallationData || contextInstallationData || []
+  
   const [installationData, setInstallationData] = useState<InstallationData[]>(initialInstallationData)
   const [additionalRows, setAdditionalRows] = useState<InstallationData[]>([])
   const [editedNotes, setEditedNotes] = useState<Record<string, string>>({})
@@ -51,6 +55,9 @@ export default function ReportDetailPage({
     notes: "Notes",
   })
   const { addToast } = useToast()
+
+  console.log("ReportDetailPage: installationData length:", installationData.length)
+  console.log("ReportDetailPage: contextInstallationData length:", contextInstallationData?.length || 0)
 
   const totalSavings = summarizeAeratorSavings(aeratorData)
   const summaryTableData = getAeratorSummaryTable(aeratorData)
@@ -107,7 +114,7 @@ export default function ReportDetailPage({
     return "Unit not accessed."
   }
 
-  // Combine and sort all data - ALWAYS CONSOLIDATE NOW
+  // Combine and sort all data
   const allData = useMemo(() => {
     // Combine original installation data with manually added rows
     const combined = [...installationData]
@@ -121,8 +128,9 @@ export default function ReportDetailPage({
       }
     })
 
-    // ALWAYS consolidate now (removed the isPreview check)
-    const finalData = consolidateInstallationsByUnitV2(combined)
+    // Only consolidate for the final report display (when isPreview is false)
+    // Keep original data structure for editing mode
+    const finalData = !isPreview ? consolidateInstallationsByUnitV2(combined) : combined
 
     // Sort the results
     return finalData.sort((a, b) => {
@@ -137,7 +145,7 @@ export default function ReportDetailPage({
       }
       return String(unitA).localeCompare(String(unitB), undefined, { numeric: true, sensitivity: "base" })
     })
-  }, [installationData, additionalRows, unitColumn])
+  }, [installationData, additionalRows, unitColumn, isPreview])
 
   console.log("Filtered data length:", allData.length)
 
@@ -397,10 +405,12 @@ export default function ReportDetailPage({
 
   useEffect(() => {
     try {
-      const storedData = localStorage.getItem("installationData")
-      if (storedData) {
-        setInstallationData(JSON.parse(storedData))
+      // Load installation data from context if not already loaded
+      if (installationData.length === 0 && contextInstallationData && contextInstallationData.length > 0) {
+        console.log("ReportDetailPage: Loading installation data from context")
+        setInstallationData(contextInstallationData)
       }
+      
       const storedAdditionalRows = localStorage.getItem("additionalDetailRows")
       if (storedAdditionalRows) {
         setAdditionalRows(JSON.parse(storedAdditionalRows))
@@ -434,7 +444,7 @@ export default function ReportDetailPage({
     } catch (error) {
       console.error("Error loading data from localStorage:", error)
     }
-  }, [])
+  }, [contextInstallationData, installationData.length])
 
   // Listen for unified notes updates
   useEffect(() => {
@@ -448,8 +458,42 @@ export default function ReportDetailPage({
     return () => window.removeEventListener("unifiedNotesUpdated", handleNotesUpdate)
   }, [])
 
+  // Show a simple table with the installation data for now
+  if (allData.length === 0) {
+    return (
+      <div className="print-section report-page min-h-[1056px] relative">
+        <div className="mb-8">
+          <img src="/images/greenlight-logo.png" alt="GreenLight Logo" className="h-24" crossOrigin="anonymous" />
+        </div>
+        <div className="mb-16">
+          <h2 className="text-xl font-bold mb-6">
+            {isEditable ? (
+              <EditableText
+                value={reportData.sections.detailPage.title}
+                onChange={(value) => updateSectionTitle("detailPage", value)}
+                placeholder="Section Title"
+                className="text-xl font-bold"
+              />
+            ) : (
+              reportData.sections.detailPage.title
+            )}
+          </h2>
+          <p className="text-gray-600">No installation data available. Please upload an Excel file first.</p>
+        </div>
+        <div className="footer-container">
+          <img
+            src="/images/greenlight-footer.png"
+            alt="GreenLight Footer"
+            className="w-full h-auto"
+            crossOrigin="anonymous"
+          />
+        </div>
+      </div>
+    )
+  }
+
   return isPreview ? (
-    <div className="report-page min-h-[1056px] relative">
+    <div className="print-section report-page min-h-[1056px] relative">
       <div className="mb-8">
         <img src="/images/greenlight-logo.png" alt="GreenLight Logo" className="h-24" crossOrigin="anonymous" />
       </div>
@@ -469,7 +513,7 @@ export default function ReportDetailPage({
             )}
           </h2>
           {isEditable && (
-            <Button onClick={handleAddRow} size="sm" className="flex items-center gap-2">
+            <Button onClick={handleAddRow} size="sm" className="flex items-center gap-2 no-print">
               <Plus className="h-4 w-4" />
               Add Row
             </Button>
@@ -480,15 +524,18 @@ export default function ReportDetailPage({
           <Table>
             <TableHeader>
               <TableRow>
-                {aeratorData.length > 0 &&
-                  Object.keys(aeratorData[0]).map((key) => <TableHead key={key}>{key}</TableHead>)}
+                {headers.slice(0, 8).map((header) => (
+                  <TableHead key={header}>{header}</TableHead>
+                ))}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {aeratorData.map((row, rowIndex) => (
+              {allData.slice(0, 20).map((row, rowIndex) => (
                 <TableRow key={rowIndex}>
-                  {Object.values(row).map((value, colIndex) => (
-                    <TableCell key={colIndex}>{value}</TableCell>
+                  {headers.slice(0, 8).map((header) => (
+                    <TableCell key={header}>
+                      {row[header] || ""}
+                    </TableCell>
                   ))}
                 </TableRow>
               ))}
@@ -496,28 +543,8 @@ export default function ReportDetailPage({
           </Table>
         </div>
 
-        <div className="mb-6 overflow-hidden rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {summaryTableData.length > 0 &&
-                  Object.keys(summaryTableData[0]).map((key) => <TableHead key={key}>{key}</TableHead>)}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {summaryTableData.map((row, rowIndex) => (
-                <TableRow key={rowIndex}>
-                  {Object.values(row).map((value, colIndex) => (
-                    <TableCell key={colIndex}>{value}</TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-
-        <p className="mb-6 text-xl font-semibold">
-          Total Estimated Water Savings: <span className="text-[#28a745]">{totalSavings.toFixed(2)} GPM</span>
+        <p className="mb-6 text-sm text-gray-600">
+          Showing {Math.min(20, allData.length)} of {allData.length} total units
         </p>
 
         <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -546,7 +573,7 @@ export default function ReportDetailPage({
               <Button
                 variant="destructive"
                 size="icon"
-                className="absolute right-2 top-2 h-6 w-6 rounded-full"
+                className="absolute right-2 top-2 h-6 w-6 rounded-full no-print"
                 onClick={() => handleImageDelete(image.id)}
               >
                 <XCircle className="h-4 w-4" />
@@ -554,7 +581,9 @@ export default function ReportDetailPage({
             </div>
           ))}
         </div>
-        <ImageUploader onImageUpload={handleImageUpload} />
+        <div className="no-print">
+          <ImageUploader onImageUpload={handleImageUpload} />
+        </div>
       </div>
 
       <div className="footer-container">
@@ -570,7 +599,7 @@ export default function ReportDetailPage({
     // PDF/Print mode - same structure but without editing capabilities
     <>
       {dataPages.map((pageData, pageIndex) => (
-        <div key={pageIndex} className="report-page min-h-[1056px] relative">
+        <div key={pageIndex} className="print-section report-page min-h-[1056px] relative">
           <div className="mb-8">
             <img
               src="/images/greenlight-logo.png"
@@ -587,45 +616,24 @@ export default function ReportDetailPage({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    {aeratorData.length > 0 &&
-                      Object.keys(aeratorData[0]).map((key) => <TableHead key={key}>{key}</TableHead>)}
+                    {headers.slice(0, 8).map((header) => (
+                      <TableHead key={header}>{header}</TableHead>
+                    ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {aeratorData.map((row, rowIndex) => (
+                  {pageData.map((row, rowIndex) => (
                     <TableRow key={rowIndex}>
-                      {Object.values(row).map((value, colIndex) => (
-                        <TableCell key={colIndex}>{value}</TableCell>
+                      {headers.slice(0, 8).map((header) => (
+                        <TableCell key={header}>
+                          {row[header] || ""}
+                        </TableCell>
                       ))}
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
-
-            <div className="mb-6 overflow-hidden rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    {summaryTableData.length > 0 &&
-                      Object.keys(summaryTableData[0]).map((key) => <TableHead key={key}>{key}</TableHead>)}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {summaryTableData.map((row, rowIndex) => (
-                    <TableRow key={rowIndex}>
-                      {Object.values(row).map((value, colIndex) => (
-                        <TableCell key={colIndex}>{value}</TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-
-            <p className="mb-6 text-xl font-semibold">
-              Total Estimated Water Savings: <span className="text-[#28a745]">{totalSavings.toFixed(2)} GPM</span>
-            </p>
 
             <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
               {images.map((image) => (
