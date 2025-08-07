@@ -3,7 +3,7 @@
 import { useRef } from "react"
 import { ReportCoverPage } from "@/components/report-cover-page"
 import { ReportLetterPage } from "@/components/report-letter-page"
-import ReportDetailPage from "@/components/report-detail-page"
+import { ReportDetailPage } from "@/components/report-detail-page"
 import { ReportNotesPage } from "@/components/report-notes-page"
 import { PrintButton } from "@/components/print-button"
 import { EnhancedPdfButton } from "@/components/enhanced-pdf-button"
@@ -12,9 +12,21 @@ import { Toggle } from "@/components/ui/toggle"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'
+
 export default function ReportPage() {
   const reportContainerRef = useRef<HTMLDivElement>(null)
   const { reportData, toggleSectionEnabled } = useReportContext()
+
+  // Add safety check for reportData
+  if (!reportData || !reportData.sections) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p>Loading report data...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-gray-100 p-4">
