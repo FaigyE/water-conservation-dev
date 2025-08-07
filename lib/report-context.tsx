@@ -1,195 +1,189 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-import type { CustomerInfo, Note } from "@/lib/types"
-
-// Add coverImage to the ReportContextType interface
-interface ReportContextType {
-  customerInfo: CustomerInfo
-  setCustomerInfo: React.Dispatch<React.SetStateAction<CustomerInfo>>
-  toiletCount: number
-  setToiletCount: React.Dispatch<React.SetStateAction<number>>
-  notes: Note[]
-  setNotes: React.Dispatch<React.SetStateAction<Note[]>>
-  letterText: string[]
-  setLetterText: React.Dispatch<React.SetStateAction<string[]>>
-  reportTitle: string
-  setReportTitle: React.Dispatch<React.SetStateAction<string>>
-  signatureName: string
-  setSignatureName: React.Dispatch<React.SetStateAction<string>>
-  signatureTitle: string
-  setSignatureTitle: React.Dispatch<React.SetStateAction<string>>
-  // Remove these lines:
-  // hasUnsavedChanges: boolean
-  // setHasUnsavedChanges: React.Dispatch<React.SetStateAction<boolean>>
-  // saveChanges: () => void
-  // Add new editable text elements
-  rePrefix: string
-  setRePrefix: React.Dispatch<React.SetStateAction<string>>
-  dearPrefix: string
-  setDearPrefix: React.Dispatch<React.SetStateAction<string>>
-  sectionTitles: Record<string, string>
-  setSectionTitles: React.Dispatch<React.SetStateAction<Record<string, string>>>
-  // Add cover image
-  coverImage: string | null
-  setCoverImage: React.Dispatch<React.SetStateAction<string | null>>
-  coverImageSize: number
-  setCoverImageSize: React.Dispatch<React.SetStateAction<number>>
-}
-
-const defaultCustomerInfo: CustomerInfo = {
-  customerName: "",
-  propertyName: "",
-  address: "",
-  city: "",
-  state: "",
-  zip: "",
-  date: new Date().toLocaleDateString(),
-}
-
-const defaultLetterText = [
-  "Please find the attached Installation Report. As you can see, we clearly indicated the installed items in each area. You will see the repairs that we made noted as well.",
-  "We successfully installed {toiletCount} toilets at the property.",
-  "Please send us copies of the actual water bills following our installation, so we can analyze them to pinpoint the anticipated water reduction and savings. We urge you to fix any constant water issues ASAP, as not to compromise potential savings as a result of our installation.",
-  "Thank you for choosing Green Light Water Conservation. We look forward to working with you in the near future.",
-]
-
-// Default section titles
-const defaultSectionTitles = {
-  notes: "Notes",
-  detailsTitle: "Detailed Unit Information",
-}
+import { createContext, useContext, useState, useEffect, useCallback } from "react"
+import type { ReportData, ReportContextType, ReportSections, Note } from "./types"
+import { loadNotesFromLocalStorage } from "./notes"
 
 const ReportContext = createContext<ReportContextType | undefined>(undefined)
 
-// Add coverImage state to the ReportProvider
-export function ReportProvider({ children }: { children: ReactNode }) {
-  const [customerInfo, setCustomerInfo] = useState<CustomerInfo>(defaultCustomerInfo)
-  const [toiletCount, setToiletCount] = useState<number>(0)
-  const [notes, setNotes] = useState<Note[]>([])
-  const [letterText, setLetterText] = useState<string[]>(defaultLetterText)
-  const [reportTitle, setReportTitle] = useState<string>("Water Conservation Installation Report")
-  const [signatureName, setSignatureName] = useState<string>("Zev Stern, CWEP")
-  const [signatureTitle, setSignatureTitle] = useState<string>("Chief Operating Officer")
-  // Remove this line:
-  // const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false)
+export const ReportProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [reportData, setReportData] = useState<ReportData>(() => {
+    // Initialize from localStorage or default values
+    if (typeof window !== "undefined") {
+      const savedData = localStorage.getItem("reportData")
+      if (savedData) {
+        try {
+          const parsedData = JSON.parse(savedData)
+          // Ensure notes are loaded from the unified notes system
+          parsedData.notes = loadNotesFromLocalStorage()
+          return parsedData
+        } catch (error) {
+          console.error("Error parsing saved reportData:", error)
+        }
+      }
+      
+      // If no saved reportData, try to load installation data and create initial reportData
+      const installationDataStr = localStorage.getItem("installationData")
+      let installationData = []
+      if (installationDataStr) {
+        try {
+          installationData = JSON.parse(installationDataStr)
+          console.log("ReportProvider: Loaded installation data:", installationData.length, "rows")
+        } catch (error) {
+          console.error("Error parsing installation data:", error)
+        }
+      }
+      
+      return {
+        clientName: "Client Name",
+        reportDate: new Date().toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        preparedBy: "Your Name",
+        introduction:
+          "This report outlines the findings and recommendations for water conservation efforts at the client's property.",
+        conclusion:
+          "Implementing the recommended changes will significantly reduce water consumption and lead to substantial savings.",
+        aeratorData: [], // This will be populated from installation data
+        installationData: installationData, // Add the installation data
+        notes: loadNotesFromLocalStorage(), // Load notes from unified system
+        images: [],
+        sections: {
+          coverPage: { title: "Water Conservation Report", enabled: true },
+          letterPage: { title: "Introduction Letter", enabled: true },
+          detailPage: { title: "Aerator Details", enabled: true },
+          notesPage: { title: "Additional Notes", enabled: true },
+          installationPage: { title: "Installation Details", enabled: true },
+        },
+      }
+    }
+    
+    // Server-side fallback
+    return {
+      clientName: "Client Name",
+      reportDate: new Date().toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
+      preparedBy: "Your Name",
+      introduction:
+        "This report outlines the findings and recommendations for water conservation efforts at the client's property.",
+      conclusion:
+        "Implementing the recommended changes will significantly reduce water consumption and lead to substantial savings.",
+      aeratorData: [],
+      installationData: [],
+      notes: [],
+      images: [],
+      sections: {
+        coverPage: { title: "Water Conservation Report", enabled: true },
+        letterPage: { title: "Introduction Letter", enabled: true },
+        detailPage: { title: "Aerator Details", enabled: true },
+        notesPage: { title: "Additional Notes", enabled: true },
+        installationPage: { title: "Installation Details", enabled: true },
+      },
+    }
+  })
 
-  // Add new state for editable text elements
-  const [rePrefix, setRePrefix] = useState<string>("RE:")
-  const [dearPrefix, setDearPrefix] = useState<string>("Dear")
-  const [sectionTitles, setSectionTitles] = useState<Record<string, string>>(defaultSectionTitles)
-
-  // Add cover image state
-  const [coverImage, setCoverImage] = useState<string | null>(null)
-  const [coverImageSize, setCoverImageSize] = useState<number>(80)
-
-  // Load data from localStorage on initial render
+  // Effect to save reportData to localStorage whenever it changes
   useEffect(() => {
-    const storedCustomerInfo = localStorage.getItem("customerInfo")
-    const storedToiletCount = localStorage.getItem("toiletCount")
-    const storedNotes = localStorage.getItem("reportNotes")
-    const storedLetterText = localStorage.getItem("letterText")
-    const storedReportTitle = localStorage.getItem("reportTitle")
-    const storedSignatureName = localStorage.getItem("signatureName")
-    const storedSignatureTitle = localStorage.getItem("signatureTitle")
-    // Load new editable text elements
-    const storedRePrefix = localStorage.getItem("rePrefix")
-    const storedDearPrefix = localStorage.getItem("dearPrefix")
-    const storedSectionTitles = localStorage.getItem("sectionTitles")
-    // Load cover image
-    const storedCoverImage = localStorage.getItem("coverImage")
-    const storedCoverImageSize = localStorage.getItem("coverImageSize")
+    if (typeof window !== "undefined") {
+      console.log("ReportProvider: Saving reportData to localStorage")
+      localStorage.setItem("reportData", JSON.stringify(reportData))
+    }
+  }, [reportData])
 
-    if (storedCustomerInfo) {
-      setCustomerInfo(JSON.parse(storedCustomerInfo))
+  // Effect to listen for custom note update events
+  useEffect(() => {
+    const handleNoteUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<Note[]>
+      setReportData((prevData) => ({
+        ...prevData,
+        notes: customEvent.detail,
+      }))
     }
 
-    if (storedToiletCount) {
-      setToiletCount(JSON.parse(storedToiletCount))
-    }
+    window.addEventListener("notesUpdated", handleNoteUpdate)
 
-    if (storedNotes) {
-      setNotes(JSON.parse(storedNotes))
-    }
-
-    if (storedLetterText) {
-      setLetterText(JSON.parse(storedLetterText))
-    } else {
-      // Initialize with default text that includes the toilet count
-      setLetterText(defaultLetterText)
-    }
-
-    if (storedReportTitle) {
-      setReportTitle(JSON.parse(storedReportTitle))
-    }
-
-    if (storedSignatureName) {
-      setSignatureName(JSON.parse(storedSignatureName))
-    }
-
-    if (storedSignatureTitle) {
-      setSignatureTitle(JSON.parse(storedSignatureTitle))
-    }
-
-    // Load new editable text elements
-    if (storedRePrefix) {
-      setRePrefix(JSON.parse(storedRePrefix))
-    }
-
-    if (storedDearPrefix) {
-      setDearPrefix(JSON.parse(storedDearPrefix))
-    }
-
-    if (storedSectionTitles) {
-      setSectionTitles(JSON.parse(storedSectionTitles))
-    }
-
-    // Load cover image
-    if (storedCoverImage) {
-      setCoverImage(JSON.parse(storedCoverImage))
-    }
-
-    if (storedCoverImageSize) {
-      setCoverImageSize(JSON.parse(storedCoverImageSize))
+    return () => {
+      window.removeEventListener("notesUpdated", handleNoteUpdate)
     }
   }, [])
 
-  // Remove the saveChanges function entirely
+  // Effect to load installation data if it's missing
+  useEffect(() => {
+    if (typeof window !== "undefined" && reportData.installationData.length === 0) {
+      const installationDataStr = localStorage.getItem("installationData")
+      if (installationDataStr) {
+        try {
+          const installationData = JSON.parse(installationDataStr)
+          console.log("ReportProvider: Loading missing installation data:", installationData.length, "rows")
+          setReportData(prevData => ({
+            ...prevData,
+            installationData: installationData
+          }))
+        } catch (error) {
+          console.error("Error loading installation data:", error)
+        }
+      }
+    }
+  }, [reportData.installationData.length])
+
+  const updateReportData = useCallback(
+    (key: keyof ReportData, value: any) => {
+      setReportData((prevData) => ({
+        ...prevData,
+        [key]: value,
+      }))
+    },
+    [setReportData],
+  )
+
+  const updateSectionTitle = useCallback(
+    (section: keyof ReportSections, title: string) => {
+      setReportData((prevData) => ({
+        ...prevData,
+        sections: {
+          ...prevData.sections,
+          [section]: {
+            ...prevData.sections[section],
+            title: title,
+          },
+        },
+      }))
+    },
+    [setReportData],
+  )
+
+  const toggleSectionEnabled = useCallback(
+    (section: keyof ReportSections) => {
+      setReportData((prevData) => ({
+        ...prevData,
+        sections: {
+          ...prevData.sections,
+          [section]: {
+            ...prevData.sections[section],
+            enabled: !prevData.sections[section].enabled,
+          },
+        },
+      }))
+    },
+    [setReportData],
+  )
+
+  console.log("ReportProvider: Current reportData:", reportData)
 
   return (
     <ReportContext.Provider
       value={{
-        customerInfo,
-        setCustomerInfo,
-        toiletCount,
-        setToiletCount,
-        notes,
-        setNotes,
-        letterText,
-        setLetterText,
-        reportTitle,
-        setReportTitle,
-        signatureName,
-        setSignatureName,
-        signatureTitle,
-        setSignatureTitle,
-        // Remove these lines:
-        // hasUnsavedChanges,
-        // setHasUnsavedChanges,
-        // saveChanges,
-        // Add new editable text elements to context
-        rePrefix,
-        setRePrefix,
-        dearPrefix,
-        setDearPrefix,
-        sectionTitles,
-        setSectionTitles,
-        // Add cover image to context
-        coverImage,
-        setCoverImage,
-        coverImageSize,
-        setCoverImageSize,
+        reportData,
+        setReportData,
+        updateReportData,
+        updateSectionTitle,
+        toggleSectionEnabled,
       }}
     >
       {children}
@@ -197,16 +191,10 @@ export function ReportProvider({ children }: { children: ReactNode }) {
   )
 }
 
-// Original hook that throws an error if used outside of a ReportProvider
-export function useReportContext() {
+export const useReportContext = () => {
   const context = useContext(ReportContext)
   if (context === undefined) {
     throw new Error("useReportContext must be used within a ReportProvider")
   }
   return context
-}
-
-// New safe hook that returns null if used outside of a ReportProvider
-export function useSafeReportContext() {
-  return useContext(ReportContext)
 }
