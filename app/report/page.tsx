@@ -1,6 +1,7 @@
 "use client"
 
-import { useRef } from "react"
+import { useRef, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { ReportCoverPage } from "@/components/report-cover-page"
 import { ReportLetterPage } from "@/components/report-letter-page"
 import { ReportDetailPage } from "@/components/report-detail-page"
@@ -18,15 +19,36 @@ export const dynamic = 'force-dynamic'
 export default function ReportPage() {
   const reportContainerRef = useRef<HTMLDivElement>(null)
   const { reportData, toggleSectionEnabled } = useReportContext()
+  const router = useRouter()
 
-  // Add safety check for reportData
-  if (!reportData || !reportData.sections) {
+  // Debug logging
+  useEffect(() => {
+    console.log("ReportPage - reportData:", reportData)
+    console.log("ReportPage - reportData.sections:", reportData?.sections)
+    console.log("ReportPage - localStorage installationData:", localStorage.getItem("installationData"))
+    console.log("ReportPage - localStorage reportData:", localStorage.getItem("reportData"))
+  }, [reportData])
+
+  // Add safety check for reportData - but be more specific about what's missing
+  if (!reportData) {
+    console.log("reportData is null/undefined")
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p>Loading report data...</p>
+        <p>Loading report data... (reportData is null)</p>
       </div>
     )
   }
+
+  if (!reportData.sections) {
+    console.log("reportData.sections is null/undefined", reportData)
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p>Loading report data... (sections missing)</p>
+      </div>
+    )
+  }
+
+  console.log("ReportPage - Rendering normally")
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-gray-100 p-4">
