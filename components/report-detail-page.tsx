@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, useMemo, useCallback } from "react"
-import EditableText from "@/components/editable-text"
+import { EditableText } from "@/components/editable-text"
 import { summarizeAeratorSavings, getAeratorSummaryTable, consolidateInstallationsByUnitV2 } from "@/lib/utils/aerator-helpers"
 import { useReportContext } from "@/lib/report-context"
 import { Button } from "@/components/ui/button"
@@ -9,7 +9,7 @@ import { updateStoredNote, getStoredNotes } from "@/lib/notes"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import Image from "next/image"
 import type { ReportImage } from "@/lib/types"
-import ImageUploader from "./image-uploader"
+import { ImageUploader } from "./image-uploader"
 import { useToast } from "@/hooks/use-toast"
 
 interface InstallationData {
@@ -36,7 +36,7 @@ export default function ReportDetailPage({
   isEditable = true,
 }: ReportDetailPageProps) {
   const { reportData, updateReportData, updateSectionTitle, setReportData } = useReportContext()
-  const { aeratorData, images } = reportData
+  const { aeratorData = [], images } = reportData
   const [installationData, setInstallationData] = useState<InstallationData[]>(initialInstallationData)
   const [additionalRows, setAdditionalRows] = useState<InstallationData[]>([])
   const [editedNotes, setEditedNotes] = useState<Record<string, string>>({})
@@ -107,7 +107,7 @@ export default function ReportDetailPage({
     return "Unit not accessed."
   }
 
-  // Combine and sort all data
+  // Combine and sort all data - ALWAYS CONSOLIDATE NOW
   const allData = useMemo(() => {
     // Combine original installation data with manually added rows
     const combined = [...installationData]
@@ -121,9 +121,8 @@ export default function ReportDetailPage({
       }
     })
 
-    // Only consolidate for the final report display (when isPreview is false)
-    // Keep original data structure for editing mode
-    const finalData = !isPreview ? consolidateInstallationsByUnitV2(combined) : combined
+    // ALWAYS consolidate now (removed the isPreview check)
+    const finalData = consolidateInstallationsByUnitV2(combined)
 
     // Sort the results
     return finalData.sort((a, b) => {
@@ -138,7 +137,7 @@ export default function ReportDetailPage({
       }
       return String(unitA).localeCompare(String(unitB), undefined, { numeric: true, sensitivity: "base" })
     })
-  }, [installationData, additionalRows, unitColumn, isPreview])
+  }, [installationData, additionalRows, unitColumn])
 
   console.log("Filtered data length:", allData.length)
 
