@@ -64,3 +64,6 @@ export function ImageUploader() {
     </div>
   )
 }
+
+// Add default export
+export default ImageUploader
