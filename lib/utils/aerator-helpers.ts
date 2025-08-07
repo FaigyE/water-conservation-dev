@@ -56,23 +56,106 @@ if (!note) return ""
 return note.charAt(0).toUpperCase() + note.slice(1)
 }
 
+// Helper function to detect installation columns dynamically
+const detectInstallationColumns = (data: any[]) => {
+  if (!data || data.length === 0) return []
+  
+  const sampleItem = data[0]
+  const installationColumns: string[] = []
+  
+  // Look for common installation column patterns
+  const patterns = [
+    /kitchen.*aerator/i,
+    /bathroom.*aerator/i,
+    /bath.*aerator/i,
+    /shower.*head/i,
+    /shower/i,
+    /toilet/i,
+    /faucet/i,
+    /installed/i
+  ]
+  
+  Object.keys(sampleItem).forEach(key => {
+    if (patterns.some(pattern => pattern.test(key))) {
+      installationColumns.push(key)
+    }
+  })
+  
+  return installationColumns
+}
+
+// Helper function to get the base value for an installation type
+const getBaseValue = (columnName: string, value: any) => {
+  if (!value || value === '0' || value === '') return null
+  
+  // If the value already contains GPM or other units, use it as is
+  if (typeof value === 'string' && (value.includes('GPM') || value.includes('Touch'))) {
+    return value
+  }
+  
+  // Default values based on column type
+  const columnLower = columnName.toLowerCase()
+  if (columnLower.includes('kitchen') && columnLower.includes('aerator')) {
+    return '1.0 GPM'
+  }
+  if (columnLower.includes('bathroom') && columnLower.includes('aerator')) {
+    return '1.0 GPM'
+  }
+  if (columnLower.includes('shower')) {
+    return '1.75 GPM'
+  }
+  if (columnLower.includes('toilet')) {
+    return 'Replaced'
+  }
+  
+  // If we can't determine the type, use the original value
+  return value.toString()
+}
+
 export const consolidateInstallationsByUnitV2 = (data: any[]) => {
+  if (!data || data.length === 0) return []
+  
+  // Find the unit column dynamically
+  const findUnitColumn = (item: any): string => {
+    const unitKeywords = ['unit', 'apt', 'apartment', 'room', 'bldg/unit']
+    
+    // First, look for exact matches
+    for (const key of Object.keys(item)) {
+      if (unitKeywords.some(keyword => key.toLowerCase() === keyword)) {
+        return key
+      }
+    }
+    
+    // Then look for partial matches
+    for (const key of Object.keys(item)) {
+      if (unitKeywords.some(keyword => key.toLowerCase().includes(keyword))) {
+        return key
+      }
+    }
+    
+    // Fallback to first column
+    return Object.keys(item)[0]
+  }
+  
+  const unitColumn = findUnitColumn(data[0])
+  const installationColumns = detectInstallationColumns(data)
+  
   const consolidated: { [key: string]: any } = {}
   
   data.forEach((item) => {
-    const unit = item.Unit || item['Bldg/Unit'] || 'Unknown'
+    const unit = item[unitColumn] || 'Unknown'
     
     if (!consolidated[unit]) {
       consolidated[unit] = {
-        Unit: unit,
-        'Kitchen Aerator': 0,
-        'Bathroom aerator': 0,
-        'Shower Head': 0,
-        'Toilets Installed': 0,
+        [unitColumn]: unit,
+        ...installationColumns.reduce((acc, col) => {
+          acc[col] = 0
+          return acc
+        }, {} as any),
         Notes: [],
-        // Keep other fields from the first occurrence
+        // Keep other non-installation fields from the first occurrence
         ...Object.keys(item).reduce((acc, key) => {
-          if (!['Kitchen Aerator', 'Bathroom aerator', 'Shower Head', 'Toilets Installed', 'Notes'].includes(key)) {
+          if (key !== unitColumn && !installationColumns.includes(key) && key !== 'Notes') {
             acc[key] = item[key]
           }
           return acc
@@ -80,19 +163,13 @@ export const consolidateInstallationsByUnitV2 = (data: any[]) => {
       }
     }
     
-    // Count installations - only count non-zero, non-empty values
-    if (item['Kitchen Aerator'] && item['Kitchen Aerator'] !== '0' && item['Kitchen Aerator'] !== '') {
-      consolidated[unit]['Kitchen Aerator']++
-    }
-    if (item['Bathroom aerator'] && item['Bathroom aerator'] !== '0' && item['Bathroom aerator'] !== '') {
-      consolidated[unit]['Bathroom aerator']++
-    }
-    if (item['Shower Head'] && item['Shower Head'] !== '0' && item['Shower Head'] !== '') {
-      consolidated[unit]['Shower Head']++
-    }
-    if (item['Toilets Installed'] && item['Toilets Installed'] !== '0' && item['Toilets Installed'] !== '') {
-      consolidated[unit]['Toilets Installed']++
-    }
+    // Count installations for each column
+    installationColumns.forEach(col => {
+      const value = item[col]
+      if (value && value !== '0' && value !== '' && value.toString().trim() !== '') {
+        consolidated[unit][col]++
+      }
+    })
     
     // Collect notes
     if (item.Notes && item.Notes.trim() !== '') {
@@ -100,19 +177,47 @@ export const consolidateInstallationsByUnitV2 = (data: any[]) => {
     }
   })
   
-  // Format the consolidated data - FIXED FORMAT
+  // Format the consolidated data with proper display values
   return Object.values(consolidated).map((unit: any) => {
-    return {
-      ...unit,
-      'Kitchen Aerator': unit['Kitchen Aerator'] > 1 ? `(${unit['Kitchen Aerator']})` : unit['Kitchen Aerator'] > 0 ? '1' : '',
-      'Bathroom aerator': unit['Bathroom aerator'] > 1 ? `(${unit['Bathroom aerator']})` : unit['Bathroom aerator'] > 0 ? '1' : '',
-      'Shower Head': unit['Shower Head'] > 1 ? `(${unit['Shower Head']})` : unit['Shower Head'] > 0 ? '1' : '',
-      'Toilets Installed': unit['Toilets Installed'] > 1 ? `(${unit['Toilets Installed']})` : unit['Toilets Installed'] > 0 ? '1' : '',
-      Notes: unit.Notes.join('; ')
-    }
+    const formattedUnit = { ...unit }
+    
+    installationColumns.forEach(col => {
+      const count = unit[col]
+      if (count === 0) {
+        formattedUnit[col] = ''
+      } else if (count === 1) {
+        // Get the base value from the original data
+        const originalItem = data.find(item => item[unitColumn] === unit[unitColumn])
+        const baseValue = getBaseValue(col, originalItem?.[col])
+        formattedUnit[col] = baseValue || '1'
+      } else {
+        // Multiple installations: "base_value (count)"
+        const originalItem = data.find(item => item[unitColumn] === unit[unitColumn])
+        const baseValue = getBaseValue(col, originalItem?.[col])
+        formattedUnit[col] = `${baseValue || '1'} (${count})`
+      }
+    })
+    
+    // Join notes
+    formattedUnit.Notes = unit.Notes.join('; ')
+    
+    return formattedUnit
   }).sort((a, b) => {
-    const unitA = parseInt(a.Unit) || 0
-    const unitB = parseInt(b.Unit) || 0
-    return unitA - unitB
+    const unitA = a[unitColumn]
+    const unitB = b[unitColumn]
+    
+    // Try numeric sort first
+    const numA = parseInt(unitA) || 0
+    const numB = parseInt(unitB) || 0
+    
+    if (!isNaN(numA) && !isNaN(numB)) {
+      return numA - numB
+    }
+    
+    // Fallback to string sort
+    return String(unitA).localeCompare(String(unitB), undefined, { 
+      numeric: true, 
+      sensitivity: 'base' 
+    })
   })
 }
