@@ -42,9 +42,9 @@ export default function CsvPreviewPage() {
     }
   }, [router])
 
-  const handleGenerateReport = () => {
-    console.log("Generate Report clicked!")
-    router.push("/report")
+  const handleContinueToForm = () => {
+    console.log("Continue to Data Form clicked!")
+    router.push("/data-form")
   }
 
   const handleBackToUpload = () => {
@@ -93,15 +93,15 @@ export default function CsvPreviewPage() {
     <div className="container mx-auto p-4">
       <Card className="mb-4">
         <CardHeader>
-          <CardTitle>CSV Data Preview</CardTitle>
+          <CardTitle>Data Preview - Verify Your Upload</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="mb-4 text-sm text-gray-600">
-            Successfully loaded {installationData.length} rows of data.
+            Successfully loaded {installationData.length} rows of data. Please review the data below and continue to fill out the report information.
           </p>
           <div className="flex gap-2 mb-4">
-            <Button onClick={handleGenerateReport} className="flex-1">
-              Generate Report
+            <Button onClick={handleContinueToForm} className="flex-1">
+              Continue to Report Form
             </Button>
             <Button onClick={handleBackToUpload} variant="outline">
               Upload New File
