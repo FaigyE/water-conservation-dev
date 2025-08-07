@@ -1,102 +1,132 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useRef, useEffect } from "react"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Button } from "@/components/ui/button"
+import { Check, X } from 'lucide-react'
+import { cn } from "@/lib/utils"
 
 interface EditableTextProps {
   value: string
-  onChange: (value: string) => void
-  className?: string
-  multiline?: boolean
+  onChange: (newValue: string) => void
   placeholder?: string
-  displayValue?: string // Add this new prop
+  multiline?: boolean
+  as?: "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "p" | "span" | "div"
+  className?: string
+  displayValue?: string // Optional: value to display when not editing
 }
 
-export default function EditableText({
+export function EditableText({
   value,
   onChange,
-  className = "",
-  multiline = false,
   placeholder = "Click to edit",
-  displayValue, // Add this parameter
+  multiline = false,
+  as: Component = "span",
+  className,
+  displayValue,
 }: EditableTextProps) {
   const [isEditing, setIsEditing] = useState(false)
-  const [text, setText] = useState(value)
+  const [currentValue, setCurrentValue] = useState(value)
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
-  // Remove this line:
-  // const { setHasUnsavedChanges } = useReportContext()
 
-  // Update local state when prop value changes
   useEffect(() => {
-    setText(value)
+    setCurrentValue(value)
   }, [value])
 
-  const handleClick = () => {
+  const handleDoubleClick = () => {
     setIsEditing(true)
   }
 
   const handleBlur = () => {
+    // This will be handled by save/cancel buttons
+    // setIsEditing(false);
+    // setCurrentValue(value); // Revert on blur if not explicitly saved
+  }
+
+  const handleSave = () => {
+    onChange(currentValue)
     setIsEditing(false)
-    if (text !== value) {
-      onChange(text)
-      // Remove this line:
-      // setHasUnsavedChanges(true)
-      console.log(`Text changed from "${value}" to "${text}"`)
+  }
+
+  const handleCancel = () => {
+    setCurrentValue(value) // Revert to original value
+    setIsEditing(false)
+  }
+
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === "Enter" && !multiline) {
+      event.preventDefault()
+      handleSave()
+    }
+    if (event.key === "Escape") {
+      handleCancel()
     }
   }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setText(e.target.value)
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !multiline) {
-      e.preventDefault()
-      inputRef.current?.blur()
-    }
-  }
-
-  useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus()
-    }
-  }, [isEditing])
-
-  if (isEditing) {
-    if (multiline) {
-      return (
-        <textarea
-          ref={inputRef as React.RefObject<HTMLTextAreaElement>}
-          value={text}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          className={`w-full p-1 border border-gray-300 rounded ${className}`}
-          rows={Math.max(3, text.split("\n").length)}
-          placeholder={placeholder}
-        />
-      )
-    }
-    return (
-      <input
-        ref={inputRef as React.RefObject<HTMLInputElement>}
-        type="text"
-        value={text}
-        onChange={handleChange}
-        onBlur={handleBlur}
-        onKeyDown={handleKeyDown}
-        className={`w-full p-1 border border-gray-300 rounded ${className}`}
-        placeholder={placeholder}
-      />
-    )
-  }
+  const displayedText = displayValue !== undefined ? displayValue : value
 
   return (
-    <div
-      onClick={handleClick}
-      className={`cursor-pointer hover:bg-gray-100 p-1 rounded ${className} ${!value ? "text-gray-400 italic" : ""}`}
+    <Component
+      className={cn("group relative inline-block", className)}
+      onDoubleClick={handleDoubleClick}
+      tabIndex={isEditing ? -1 : 0} // Make non-editable span focusable
+      aria-label={placeholder}
     >
-      {displayValue || value || placeholder}
-    </div>
+      {isEditing ? (
+        <div className="flex items-center gap-2">
+          {multiline ? (
+            <Textarea
+              ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+              value={currentValue}
+              onChange={(e) => setCurrentValue(e.target.value)}
+              onBlur={handleBlur}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder}
+              className="editable-text-textarea min-h-[60px] flex-grow"
+              autoFocus
+            />
+          ) : (
+            <Input
+              ref={inputRef as React.RefObject<HTMLInputElement>}
+              type="text"
+              value={currentValue}
+              onChange={(e) => setCurrentValue(e.target.value)}
+              onBlur={handleBlur}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder}
+              className="editable-text-input flex-grow"
+              autoFocus
+            />
+          )}
+          <Button
+            onClick={handleSave}
+            size="icon"
+            variant="ghost"
+            className="editable-text-button h-8 w-8 shrink-0"
+            aria-label="Save"
+          >
+            <Check className="h-4 w-4" />
+          </Button>
+          <Button
+            onClick={handleCancel}
+            size="icon"
+            variant="ghost"
+            className="editable-text-button h-8 w-8 shrink-0"
+            aria-label="Cancel"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      ) : (
+        <span className="editable-text-display cursor-pointer rounded-md p-1 hover:bg-gray-100 group-focus-within:ring-2 group-focus-within:ring-ring group-focus-within:ring-offset-2">
+          {displayedText || placeholder}
+        </span>
+      )}
+    </Component>
   )
 }
+
+// Add default export
+export default EditableText
