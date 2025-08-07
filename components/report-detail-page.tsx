@@ -9,7 +9,7 @@ import { updateStoredNote, getStoredNotes } from "@/lib/notes"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import Image from "next/image"
 import type { ReportImage } from "@/lib/types"
-import ImageUploader from "./image-uploader"
+import { ImageUploader } from "./image-uploader"
 import { useToast } from "@/hooks/use-toast"
 
 interface InstallationData {
@@ -30,7 +30,7 @@ interface ReportDetailPageProps {
   isEditable?: boolean
 }
 
-export default function ReportDetailPage({
+export function ReportDetailPage({
   installationData: propInstallationData,
   isPreview = true,
   isEditable = true,
@@ -582,7 +582,7 @@ export default function ReportDetailPage({
           ))}
         </div>
         <div className="no-print">
-          <ImageUploader onImageUpload={handleImageUpload} />
+          <ImageUploader />
         </div>
       </div>
 
@@ -668,3 +668,6 @@ export default function ReportDetailPage({
     </>
   )
 }
+
+// Add default export
+export default ReportDetailPage
