@@ -39,29 +39,20 @@ export default function HomePage() {
       console.log("Starting to parse Excel file:", file.name)
       const data = await parseExcel(file)
       console.log("Parsed data:", data.length, "rows")
-      console.log("Sample data:", data.slice(0, 2))
       
       // Save to localStorage
       localStorage.setItem("installationData", JSON.stringify(data))
       console.log("Data saved to localStorage")
       
-      // Verify it was saved
-      const savedData = localStorage.getItem("installationData")
-      if (savedData) {
-        const parsedSavedData = JSON.parse(savedData)
-        console.log("Verified saved data:", parsedSavedData.length, "rows")
-        setSuccess(`File uploaded and parsed successfully! Found ${data.length} rows of data.`)
-        
-        // Navigate after a short delay to show success message
-        setTimeout(() => {
-          router.push("/csv-preview")
-        }, 1500)
-      } else {
-        throw new Error("Failed to save data to localStorage")
-      }
+      setSuccess(`File uploaded successfully! Found ${data.length} rows of data.`)
+      
+      // Navigate to preview page
+      setTimeout(() => {
+        router.push("/csv-preview")
+      }, 1500)
     } catch (error) {
-      console.error("Error uploading or parsing file:", error)
-      setError(`Failed to process file: ${error instanceof Error ? error.message : 'Unknown error'}. Please ensure it's a valid Excel file.`)
+      console.error("Error uploading file:", error)
+      setError(`Failed to process file: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setLoading(false)
     }
@@ -71,7 +62,7 @@ export default function HomePage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-100 p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="text-center">Upload Excel Report</CardTitle>
+          <CardTitle className="text-center">Water Conservation Report Generator</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <Input type="file" accept=".xlsx, .xls" onChange={handleFileChange} />
@@ -89,12 +80,12 @@ export default function HomePage() {
           )}
           
           <Button onClick={handleUpload} className="w-full" disabled={!file || loading}>
-            {loading ? "Processing..." : "Upload and Preview"}
+            {loading ? "Processing..." : "Upload and Continue"}
           </Button>
           
           {file && (
             <p className="text-sm text-gray-600 text-center">
-              Selected: {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+              Selected: {file.name}
             </p>
           )}
         </CardContent>
